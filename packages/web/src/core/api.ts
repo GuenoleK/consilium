@@ -1,0 +1,47 @@
+import type { Agent, Attachment, ConsiliumTask, Message, Topic } from "@consilium/core";
+export interface RemoteAccessStatus {
+  available: boolean;
+  enabled: boolean;
+  url?: string;
+}
+const baseUrl = import.meta.env.VITE_CONSILIUM_API_URL || "/api";
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(`${baseUrl}${path}`, { ...init, headers: { "content-type": "application/json", ...init?.headers } });
+  if (!response.ok) throw new Error(await response.text());
+  if (response.status === 204) return undefined as T;
+  return response.json() as Promise<T>;
+}
+export const api = {
+  topics: () => request<Topic[]>("/topics"),
+  messages: (topicId: string) => request<Message[]>(`/topics/${topicId}/messages`),
+  agents: () => request<Agent[]>("/agents"),
+  remoteAccess: () => request<RemoteAccessStatus>("/remote-access"),
+  createTopic: (title: string) => request<Topic>("/topics", { method: "POST", body: JSON.stringify({ title, description: "" }) }),
+  resetTopic: (topicId: string) => request<Topic>(`/topics/${topicId}/reset`, { method: "POST" }),
+  deleteTopic: (topicId: string) => request<void>(`/topics/${topicId}`, { method: "DELETE" }),
+  sendMessage: (topicId: string, body: string, attachmentIds: string[] = []) => request<Message>(`/topics/${topicId}/messages`, {
+    method: "POST", body: JSON.stringify({ authorId: "human", authorName: "Vous", authorKind: "human", body, attachmentIds }),
+  }),
+  uploadAttachment: async (topicId: string, file: File) => {
+    const form = new FormData();
+    form.append("file", file);
+    const response = await fetch(`${baseUrl}/topics/${topicId}/attachments`, { method: "POST", body: form });
+    if (!response.ok) throw new Error(await response.text());
+    return response.json() as Promise<Attachment>;
+  },
+  attachmentUrl: (attachmentId: string) => `${baseUrl}/attachments/${attachmentId}`,
+  disconnectAgent: (agentId: string) => request<Agent>(`/agents/${agentId}/disconnect`, { method: "POST" }),
+  tasks: (topicId: string) => request<ConsiliumTask[]>(`/tasks?topicId=${encodeURIComponent(topicId)}`),
+  createTask: (input: { topicId: string; title: string; description: string; assignedAgentId?: string }) =>
+    request<ConsiliumTask>("/tasks", { method: "POST", body: JSON.stringify({ ...input, requestedBy: "human" }) }),
+  addTaskInstruction: (taskId: string, body: string) => request<ConsiliumTask>(`/tasks/${taskId}/instructions`, {
+    method: "POST", body: JSON.stringify({ authorId: "human", authorName: "Vous", body }),
+  }),
+  resolveApproval: (taskId: string, approvalId: string, decision: "approved" | "rejected", decisionNote?: string) =>
+    request<{ task: ConsiliumTask }>(`/tasks/${taskId}/approvals/${approvalId}/resolve`, {
+      method: "POST", body: JSON.stringify({ decision, resolvedBy: "human", decisionNote }),
+    }),
+  cancelTask: (taskId: string) => request<ConsiliumTask>(`/tasks/${taskId}/cancel`, {
+    method: "POST", body: JSON.stringify({ requestedBy: "human" }),
+  }),
+};

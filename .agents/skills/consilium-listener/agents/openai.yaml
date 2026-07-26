@@ -1,0 +1,4 @@
+interface:
+  display_name: "Consilium Listener"
+  short_description: "Rester connecté à la table ronde Consilium"
+  default_prompt: "Use $consilium-listener to connect this agent to Consilium and keep listening for messages."

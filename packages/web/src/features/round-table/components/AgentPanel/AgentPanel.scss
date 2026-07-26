@@ -1,0 +1,32 @@
+.agent-panel {
+  min-height: 0; padding: 26px 20px 18px; overflow-x: hidden; overflow-y: auto; background: var(--cs-color-surface); border-left: 1px solid var(--cs-color-border); scrollbar-color: var(--cs-color-border) transparent; scrollbar-width: thin;
+  &__header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; span, strong { display: block; } span { color: var(--cs-color-text-muted); font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; } strong { margin-top: 4px; font-size: 14px; } button { display: grid; place-items: center; width: 35px; height: 35px; border: 1px solid var(--cs-color-border); border-radius: 10px; background: transparent; color: var(--cs-color-text-muted); } }
+  &__refresh:hover { background: var(--cs-color-surface-soft) !important; color: var(--cs-color-accent-strong) !important; }
+  &__refresh--loading .icon { animation: agent-panel-spin .7s linear infinite; }
+  &__human, &__agent { display: grid; grid-template-columns: 37px minmax(0, 1fr) 30px; align-items: center; column-gap: 11px; padding: 10px 4px; div { min-width: 0; } strong, small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } strong { font-size: 13px; } small { margin-top: 3px; color: var(--cs-color-text-muted); font-size: 11px; } }
+  &__human::after { grid-column: 3; width: 30px; content: ""; }
+  &__avatar-wrap { position: relative; display: block; width: 37px; height: 37px; }
+  &__avatar { display: grid; place-items: center; width: 37px; height: 37px; border-radius: 12px; color: white; font-size: 11px; font-weight: 700; &--human { background: var(--cs-color-accent); } }
+  &__label { margin: 20px 4px 6px; color: var(--cs-color-text-muted); font-size: 11px; font-weight: 700; text-transform: uppercase; }
+  &__empty { margin: 8px 4px 0; color: var(--cs-color-text-muted); font-size: 10px; line-height: 1.45; }
+  &__avatar--blue { background: var(--cs-color-blue); } &__avatar--purple { background: var(--cs-color-purple); }
+  &__status { position: absolute; top: -3px; left: -3px; width: 10px; height: 10px; border: 2px solid var(--cs-color-surface); border-radius: 50%; background: #64a17a; box-shadow: 0 1px 3px rgba(45, 41, 37, .16); }
+  &__status--away { background: #bcb2a5; }
+  &__status--offline { background: #d85f66; }
+  &__status--listening, &__status--online, &__status--working { background: #35a779; }
+  &__agent-meta { display: flex !important; align-items: center; gap: 5px; }
+  &__agent-meta > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  &__thinking { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 2px; height: 9px; overflow: visible !important; }
+  &__thinking i { width: 3px; height: 3px; border-radius: 50%; background: #35a779; animation: agent-panel-thinking-wave 1s ease-in-out infinite; }
+  &__thinking i:nth-child(2) { animation-delay: .14s; }
+  &__thinking i:nth-child(3) { animation-delay: .28s; }
+  &__agent--away { opacity: .7; }
+  &__disconnect { grid-column: 3; display: grid; place-items: center; width: 30px; height: 30px; border: 0; border-radius: 9px; background: transparent; color: var(--cs-color-text-muted); opacity: 0; transition: opacity .15s, background .15s; .icon { font-size: 17px; } &:hover { background: var(--cs-color-accent-soft); color: var(--cs-color-accent-strong); } }
+  &__agent:hover &__disconnect, &__disconnect:focus-visible { opacity: 1; }
+  &__context { margin: 22px 0 20px; padding: 13px; border: 1px solid #e3d5c4; border-radius: var(--cs-radius-md); background: #fbf4e9; div, span { display: flex; align-items: center; gap: 8px; } div { color: var(--cs-color-accent-strong); } strong { font-size: 11px; } p { margin: 9px 0; color: var(--cs-color-text-muted); font-size: 9px; line-height: 1.5; } span { color: var(--cs-color-green); font-size: 9px; .icon { font-size: 13px; } } }
+}
+@keyframes agent-panel-spin { to { transform: rotate(360deg); } }
+@keyframes agent-panel-thinking-wave {
+  0%, 60%, 100% { transform: translateY(1px); opacity: .45; }
+  30% { transform: translateY(-2px); opacity: 1; }
+}

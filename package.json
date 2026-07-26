@@ -1,0 +1,28 @@
+{
+  "name": "consilium-workspace",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "workspaces": ["packages/*"],
+  "scripts": {
+    "dev": "concurrently -n server,web -c yellow,cyan \"npm:dev:server\" \"npm:dev:web\"",
+    "dev:server": "npm run dev -w @consilium/server",
+    "dev:web": "npm run dev -w @consilium/web",
+    "dev:mcp": "npm run dev -w @consilium/mcp",
+    "remote": "concurrently -n app,remote -c cyan,green \"npm:dev\" \"npm:remote:start\"",
+    "remote:start": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/remote-access.ps1 start",
+    "remote:status": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/remote-access.ps1 status",
+    "remote:stop": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/remote-access.ps1 stop",
+    "remote:gateway": "node packages/server/dist/remoteGateway.js",
+    "remote:temporary-app": "concurrently -n server,web,gateway -c yellow,cyan,green \"npm:dev:server\" \"npm:dev:web\" \"npm:remote:gateway\"",
+    "build": "npm run build -w @consilium/core && npm run build -w @consilium/server && npm run build -w @consilium/mcp && npm run build -w @consilium/web",
+    "typecheck": "npm run build -w @consilium/core && npm run typecheck --workspaces --if-present",
+    "start:server": "node packages/server/dist/index.js",
+    "start:mcp": "node packages/mcp/dist/index.js"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "tsx": "^4.20.0",
+    "typescript": "^5.8.0"
+  }
+}

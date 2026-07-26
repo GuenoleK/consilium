@@ -1,0 +1,5 @@
+.conversation-actions {
+  display: flex; align-items: center; gap: 4px;
+  button { display: grid; place-items: center; width: 34px; height: 34px; border: 0; border-radius: 10px; background: transparent; color: var(--cs-color-text-muted); &:hover:not(:disabled) { background: var(--cs-color-surface-soft); color: var(--cs-color-text); } &:disabled { cursor: default; opacity: .35; } }
+  &__delete:hover:not(:disabled) { background: var(--cs-color-accent-soft) !important; color: var(--cs-color-accent-strong) !important; }
+}

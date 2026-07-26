@@ -1,0 +1,4 @@
+interface:
+  display_name: "Consilium Frontend"
+  short_description: "Conventions React SCSS BEM de Consilium"
+  default_prompt: "Use $consilium-frontend to build or refactor a Consilium frontend feature."
