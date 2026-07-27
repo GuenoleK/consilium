@@ -22,7 +22,7 @@ export function MentionSuggestions({ agents, activeIndex, onSelect }: MentionSug
       onClick={() => onSelect(agent)}
     >
       <span className="mention-suggestions__avatar">{initials(agent.name)}</span>
-      <span className="mention-suggestions__identity"><strong>{agent.name}</strong><small>@{agent.id} · {agent.model || "Agent MCP"}</small></span>
+      <span className="mention-suggestions__identity"><strong>{agent.name}</strong><small>@{agent.id} · {agent.model || "Modèle non déclaré"}</small></span>
       <i className={`mention-suggestions__status mention-suggestions__status--${agent.status}`} />
     </button>)}
   </div>;

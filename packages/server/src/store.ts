@@ -190,12 +190,26 @@ export class ConsiliumStore {
 
   async registerAgent(input: Pick<Agent, "id" | "name" | "model" | "status">) {
     await this.ensureLoaded();
-    const normalizedInput = { ...input, id: input.id.trim().toLowerCase(), name: input.name.trim() };
+    const normalizedInput = {
+      ...input,
+      id: input.id.trim().toLowerCase(),
+      name: input.name.trim(),
+      model: input.model?.trim() || undefined,
+    };
     const found = this.snapshot.agents.find((agent) => agent.id === normalizedInput.id);
     const agent: Agent = { ...normalizedInput, lastSeenAt: now() };
-    found ? Object.assign(found, { model: agent.model, status: agent.status, lastSeenAt: agent.lastSeenAt }) : this.snapshot.agents.push(agent);
+    if (found) {
+      Object.assign(found, {
+        name: agent.name,
+        status: agent.status,
+        lastSeenAt: agent.lastSeenAt,
+        ...(agent.model ? { model: agent.model } : {}),
+      });
+    } else {
+      this.snapshot.agents.push(agent);
+    }
     await this.persist();
-    return agent;
+    return found || agent;
   }
 
   async disconnectAgent(id: string) {

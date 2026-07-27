@@ -3,11 +3,11 @@ import { Icon } from "../../../../shared/components/Icon/Icon";
 import { useSpinCycle } from "../../../../shared/hooks/useSpinCycle";
 import "./TopicList.scss";
 
-interface TopicListProps { topics: Topic[]; activeId?: string; onSelect: (id: string) => void; onCreate: () => void; onSync: () => Promise<void>; }
-export function TopicList({ topics, activeId, onSelect, onCreate, onSync }: TopicListProps) {
+interface TopicListProps { topics: Topic[]; activeId?: string; onSelect: (id: string) => void; onCreate: () => void; onSync: () => Promise<void>; onMobileClose?: () => void; }
+export function TopicList({ topics, activeId, onSelect, onCreate, onSync, onMobileClose }: TopicListProps) {
   const { spinning: syncing, runSpinCycle } = useSpinCycle();
   return <aside className="topic-list">
-    <div className="topic-list__brand"><span className="topic-list__crest">C</span><div><strong>Consilium</strong><small>La table ronde</small></div></div>
+    <div className="topic-list__brand"><span className="topic-list__crest">C</span><div><strong>Consilium</strong><small>La table ronde</small></div><button className="topic-list__mobile-close" onClick={onMobileClose} aria-label="Fermer les sujets"><Icon name="close" /></button></div>
     <button className="topic-list__create" onClick={onCreate}><Icon name="add" />Nouveau sujet</button>
     <div className="topic-list__heading"><span>Sujets</span><span>{topics.length}</span></div>
     <nav className="topic-list__items" aria-label="Sujets de discussion">

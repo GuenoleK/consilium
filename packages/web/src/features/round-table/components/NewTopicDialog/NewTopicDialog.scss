@@ -1,0 +1,49 @@
+.new-topic-dialog {
+  position: fixed; z-index: 30; inset: 0; display: grid; place-items: center; padding: 24px; background: rgba(45, 41, 37, .42); backdrop-filter: blur(5px); animation: new-topic-dialog-backdrop .18s ease-out;
+
+  &--closing { pointer-events: none; animation: new-topic-dialog-backdrop-out .18s ease-in forwards; }
+  &--closing &__panel { animation: new-topic-dialog-panel-out .18s ease-in forwards; }
+  &__panel { width: min(100%, 480px); overflow: hidden; border: 1px solid rgba(222, 213, 200, .9); border-radius: var(--cs-radius-lg); background: var(--cs-color-surface); box-shadow: 0 28px 80px rgba(45, 41, 37, .2); animation: new-topic-dialog-panel .22s cubic-bezier(.2, .8, .2, 1); }
+  &__header { display: grid; grid-template-columns: 44px minmax(0, 1fr) 34px; align-items: center; gap: 12px; padding: 22px 22px 18px; border-bottom: 1px solid var(--cs-color-border); background: linear-gradient(135deg, #fffdf8 0%, #fbf2e8 100%); }
+  &__header > div > span { color: var(--cs-color-accent); font-size: 10px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+  &__header h2 { margin: 4px 0 0; font: 700 20px var(--cs-font-heading); }
+  &__header > button { display: grid; place-items: center; width: 34px; height: 34px; padding: 0; border: 0; border-radius: 10px; background: transparent; color: var(--cs-color-text-muted); &:hover { background: var(--cs-color-surface-warm); color: var(--cs-color-text); } }
+  &__icon { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 14px; background: var(--cs-color-accent-soft); color: var(--cs-color-accent-strong); }
+  &__form { display: grid; gap: 18px; padding: 22px; }
+  &__form label { position: relative; display: grid; gap: 7px; }
+  &__form label > span { color: var(--cs-color-text); font-size: 12px; font-weight: 700; }
+  &__form label > span small { margin-left: 5px; color: var(--cs-color-text-muted); font-size: 10px; font-weight: 500; }
+  &__form input, &__form textarea { width: 100%; border: 1px solid var(--cs-color-border); border-radius: 12px; outline: 0; background: #fffefa; color: var(--cs-color-text); font: 500 14px var(--cs-font-body); transition: border-color .15s, box-shadow .15s; &::placeholder { color: #a49b91; } &:focus { border-color: #c28b75; box-shadow: 0 0 0 3px rgba(183, 93, 63, .1); } }
+  &__form input { height: 44px; padding: 0 13px; }
+  &__form textarea { min-height: 92px; padding: 12px 13px 26px; resize: vertical; line-height: 1.5; }
+  &__count { position: absolute; right: 11px; bottom: 9px; color: var(--cs-color-text-muted); font-size: 9px; }
+  &__error { display: flex; align-items: center; gap: 7px; margin: -4px 0 0; color: #a44738; font-size: 11px; .icon { font-size: 17px; } }
+  &__actions { display: flex; justify-content: flex-end; gap: 9px; padding-top: 2px; }
+  &__actions button { display: flex; align-items: center; justify-content: center; gap: 7px; min-height: 40px; padding: 0 16px; border-radius: 11px; font-weight: 700; }
+  &__cancel { border: 1px solid var(--cs-color-border); background: transparent; color: var(--cs-color-text-muted); &:hover { background: var(--cs-color-surface-soft); color: var(--cs-color-text); } }
+  &__submit { border: 0; background: var(--cs-color-accent); color: white; box-shadow: 0 8px 18px rgba(183, 93, 63, .2); &:hover:not(:disabled) { background: var(--cs-color-accent-strong); } &:disabled { opacity: .5; box-shadow: none; } .icon { font-size: 18px; } }
+  &__submit--loading .icon { animation: new-topic-dialog-spin .8s linear infinite; }
+}
+
+@keyframes new-topic-dialog-backdrop { from { opacity: 0; } }
+@keyframes new-topic-dialog-panel { from { opacity: 0; transform: translateY(10px) scale(.98); } }
+@keyframes new-topic-dialog-backdrop-out { to { opacity: 0; } }
+@keyframes new-topic-dialog-panel-out { to { opacity: 0; transform: translateY(8px) scale(.985); } }
+@keyframes new-topic-dialog-spin { to { transform: rotate(360deg); } }
+
+@media (max-width: 720px) {
+  .new-topic-dialog {
+    place-items: end center; padding: 0;
+    &__panel { width: 100%; border-width: 1px 0 0; border-radius: 24px 24px 0 0; padding-bottom: env(safe-area-inset-bottom); }
+    &__header { padding: 18px 18px 15px; }
+    &__header h2 { font-size: 18px; }
+    &__form { gap: 16px; padding: 18px; }
+    &__form input, &__form textarea { font-size: 16px; }
+    &__actions { display: grid; grid-template-columns: 1fr 1.35fr; }
+    &__actions button { width: 100%; }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .new-topic-dialog, .new-topic-dialog__panel { animation: none; }
+}

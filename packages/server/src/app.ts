@@ -58,7 +58,7 @@ export const createApp = (store = new ConsiliumStore()) => {
   });
   app.get("/api/agents", async (context) => context.json(await store.listAgents()));
   app.post("/api/agents", async (context) => {
-    const input = z.object({ id: agentIdSchema, name: z.string().trim().min(1).max(80), model: z.string().optional(), status: z.enum(["online", "listening", "working", "away", "offline"]).default("online") }).parse(await context.req.json());
+    const input = z.object({ id: agentIdSchema, name: z.string().trim().min(1).max(80), model: z.string().trim().min(1).optional(), status: z.enum(["online", "listening", "working", "away", "offline"]).default("online") }).parse(await context.req.json());
     return context.json(await store.registerAgent(input));
   });
   app.post("/api/agents/:id/disconnect", async (context) => {

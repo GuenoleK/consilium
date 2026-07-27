@@ -13,7 +13,8 @@ let activePresence: ActivePresence | undefined;
 let heartbeatInFlight = false;
 
 const setActivePresence = (presence: ActivePresence) => {
-  activePresence = presence;
+  const previousModel = activePresence?.id === presence.id ? activePresence.model : undefined;
+  activePresence = { ...presence, model: presence.model?.trim() || previousModel };
 };
 
 const clearActivePresence = (agentId?: string) => {
@@ -64,10 +65,10 @@ server.tool("post_message", "Post an agent reply or request into a topic. Use @m
   await sendPresenceHeartbeat();
   return result(message);
 });
-server.tool("list_messages", "List topic messages, optionally after an ISO timestamp.", {
+server.tool("list_messages", "List topic messages, optionally after an ISO timestamp. Each message includes durable attachment metadata; call read_attachment with its id to access the file.", {
   topicId: z.string(), since: z.string().datetime().optional(),
 }, async ({ topicId, since }) => result(await client.listMessages(topicId, since)));
-server.tool("wait_for_messages", "Keep an agent listening for new topic messages. The UI can disconnect the listener; call this again after each timeout or handled message.", {
+server.tool("wait_for_messages", "Keep an agent listening for new topic messages. Returned messages include durable attachments that can be opened with read_attachment. The UI can disconnect the listener; call this again after each timeout or handled message.", {
   topicId: z.string(), agentId: agentIdSchema.optional(), since: z.string().datetime().optional(),
   agentName: z.string().optional(), model: z.string().optional(),
   timeoutSeconds: z.number().int().min(1).max(300).optional(),
@@ -77,7 +78,7 @@ server.tool("wait_for_messages", "Keep an agent listening for new topic messages
   if (agentId) {
     const registered = (await client.listAgents()).find((agent) => agent.id === agentId);
     if (registered?.status === "offline") return result({ timedOut: false, disconnected: true, cursor, messages: [] });
-    setActivePresence({ id: agentId, name: agentName || agentId, model, status: "listening" });
+    setActivePresence({ id: agentId, name: agentName || registered?.name || agentId, model: model || registered?.model, status: "listening" });
     await sendPresenceHeartbeat();
   }
   while (Date.now() < deadline) {
@@ -111,8 +112,10 @@ server.tool("wait_for_messages", "Keep an agent listening for new topic messages
   }
   return result({ timedOut: true, disconnected: false, cursor, messages: [] });
 });
-server.tool("register_agent", "Register or refresh an agent presence at the table.", {
-  id: agentIdSchema, name: z.string().trim().min(1).max(80), model: z.string().optional(),
+server.tool("register_agent", "Register or refresh an agent presence at the table. Every agent must declare its actual runtime identity and model; never reuse a default or previously observed model name.", {
+  id: agentIdSchema.describe("Stable lowercase agent id, for example codex, claude, or expert."),
+  name: z.string().trim().min(1).max(80).describe("Agent display name, for example Codex, Claude, or Expert."),
+  model: z.string().trim().min(1).describe("Exact current model identifier, for example gpt-5.6-sol or claude-sonnet-5."),
   status: z.enum(["online", "listening", "working", "away", "offline"]).optional(),
 }, async ({ id, name, model, status }) => {
   const presence = { id, name, model, status: status || "online" };
@@ -128,7 +131,7 @@ server.tool("disconnect_agent", "Disconnect an agent from its continuous listeni
   clearActivePresence(agentId);
   return result(await client.disconnectAgent(agentId));
 });
-server.tool("read_attachment", "Read a media attachment referenced by a Consilium message as base64 data.", {
+server.tool("read_attachment", "Read the complete base64 content of a durable attachment using the id included in a message. Decode base64 using the attachment name and mediaType.", {
   attachmentId: z.string().min(1),
 }, async ({ attachmentId }) => result(await client.getAttachment(attachmentId)));
 server.tool("list_tasks", "List shared tasks and their instructions, approvals, progress, and results.", {

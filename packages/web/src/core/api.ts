@@ -1,9 +1,4 @@
 import type { Agent, Attachment, ConsiliumTask, Message, Topic } from "@consilium/core";
-export interface RemoteAccessStatus {
-  available: boolean;
-  enabled: boolean;
-  url?: string;
-}
 const baseUrl = import.meta.env.VITE_CONSILIUM_API_URL || "/api";
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${baseUrl}${path}`, { ...init, headers: { "content-type": "application/json", ...init?.headers } });
@@ -15,8 +10,7 @@ export const api = {
   topics: () => request<Topic[]>("/topics"),
   messages: (topicId: string) => request<Message[]>(`/topics/${topicId}/messages`),
   agents: () => request<Agent[]>("/agents"),
-  remoteAccess: () => request<RemoteAccessStatus>("/remote-access"),
-  createTopic: (title: string) => request<Topic>("/topics", { method: "POST", body: JSON.stringify({ title, description: "" }) }),
+  createTopic: (title: string, description = "") => request<Topic>("/topics", { method: "POST", body: JSON.stringify({ title, description }) }),
   resetTopic: (topicId: string) => request<Topic>(`/topics/${topicId}/reset`, { method: "POST" }),
   deleteTopic: (topicId: string) => request<void>(`/topics/${topicId}`, { method: "DELETE" }),
   sendMessage: (topicId: string, body: string, attachmentIds: string[] = []) => request<Message>(`/topics/${topicId}/messages`, {

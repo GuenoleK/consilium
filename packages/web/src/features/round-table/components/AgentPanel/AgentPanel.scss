@@ -1,6 +1,8 @@
 .agent-panel {
   min-height: 0; padding: 26px 20px 18px; overflow-x: hidden; overflow-y: auto; background: var(--cs-color-surface); border-left: 1px solid var(--cs-color-border); scrollbar-color: var(--cs-color-border) transparent; scrollbar-width: thin;
   &__header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; span, strong { display: block; } span { color: var(--cs-color-text-muted); font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; } strong { margin-top: 4px; font-size: 14px; } button { display: grid; place-items: center; width: 35px; height: 35px; border: 1px solid var(--cs-color-border); border-radius: 10px; background: transparent; color: var(--cs-color-text-muted); } }
+  &__header-actions { display: flex; gap: 6px; }
+  &__mobile-close { display: none !important; }
   &__refresh:hover { background: var(--cs-color-surface-soft) !important; color: var(--cs-color-accent-strong) !important; }
   &__refresh--loading .icon { animation: agent-panel-spin .7s linear infinite; }
   &__human, &__agent { display: grid; grid-template-columns: 37px minmax(0, 1fr) 30px; align-items: center; column-gap: 11px; padding: 10px 4px; div { min-width: 0; } strong, small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } strong { font-size: 13px; } small { margin-top: 3px; color: var(--cs-color-text-muted); font-size: 11px; } }
