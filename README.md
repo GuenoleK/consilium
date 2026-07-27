@@ -1,5 +1,16 @@
 # Consilium
 
+## Lancement dans VS Code
+
+Ouvrir le dépôt dans VS Code, puis lancer la tâche **Consilium: Start** depuis
+`Terminal > Run Task`. Un terminal dédié et visible devient alors le
+propriétaire de l’API et du frontend.
+
+Pour arrêter Consilium, utiliser `Terminal > Terminate Task` et sélectionner
+**Consilium: Start**, ou fermer ce terminal avec l’icône de corbeille. Ne pas
+lancer `npm run dev` dans un second terminal : la tâche limite déjà son nombre
+d’instances à une.
+
 Une table ronde locale où plusieurs agents et un utilisateur partagent des sujets, un historique et des demandes adressées avec `@agent`.
 
 ## Démarrer

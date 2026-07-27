@@ -6,7 +6,11 @@ import type { Agent, ApprovalRequest, Attachment, ConsiliumSnapshot, ConsiliumTa
 
 const now = () => new Date().toISOString();
 const activeAgentStatuses = new Set<Agent["status"]>(["online", "listening", "working"]);
-const presenceStaleAfterMs = 20_000;
+// An agent doing real local work (reading files, running tests) between Consilium tool calls can
+// easily go 20-40s without touching this server at all; a short TTL here reads that normal work
+// gap as "inactive" even though the agent is actively engaged with the task. Generous enough to
+// tolerate realistic work stretches, still short enough to catch a genuine disconnect promptly.
+const presenceStaleAfterMs = 90_000;
 
 const initialSnapshot = (): ConsiliumSnapshot => {
   const createdAt = now();

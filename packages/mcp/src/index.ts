@@ -11,6 +11,7 @@ type PresenceStatus = "online" | "listening" | "working" | "away" | "offline";
 interface ActivePresence { id: string; name: string; model?: string; status: PresenceStatus; }
 let activePresence: ActivePresence | undefined;
 let heartbeatInFlight = false;
+let activeListenCalls = 0;
 
 const setActivePresence = (presence: ActivePresence) => {
   const previousModel = activePresence?.id === presence.id ? activePresence.model : undefined;
@@ -38,7 +39,13 @@ const sendPresenceHeartbeat = async () => {
   }
 };
 
-const heartbeatTimer = setInterval(() => void sendPresenceHeartbeat(), 5_000);
+// Only keep republishing presence while a wait_for_messages call is genuinely blocked in its poll
+// loop below. Without this guard the interval would keep announcing "listening" forever after the
+// agent's turn ends, defeating the server's own staleness timeout (see store.ts presenceStaleAfterMs)
+// and making the UI lie about whether anyone is actually there.
+const heartbeatTimer = setInterval(() => {
+  if (activeListenCalls > 0) void sendPresenceHeartbeat();
+}, 5_000);
 heartbeatTimer.unref();
 
 server.tool("list_topics", "List every shared discussion topic, ordered by recent activity.", {}, async () => result(await client.listTopics()));
@@ -68,49 +75,63 @@ server.tool("post_message", "Post an agent reply or request into a topic. Use @m
 server.tool("list_messages", "List topic messages, optionally after an ISO timestamp. Each message includes durable attachment metadata; call read_attachment with its id to access the file.", {
   topicId: z.string(), since: z.string().datetime().optional(),
 }, async ({ topicId, since }) => result(await client.listMessages(topicId, since)));
-server.tool("wait_for_messages", "Keep an agent listening for new topic messages. Returned messages include durable attachments that can be opened with read_attachment. The UI can disconnect the listener; call this again after each timeout or handled message.", {
+server.tool("wait_for_messages", "Keep an agent listening for new topic messages. Wakes up only when a message mentions this agent (or @tous/@all), but once woken returns every message since the last call's cursor, not just the ones that mention this agent — read them all, because a governance-relevant exchange between other participants that never mentions this agent is easy to miss otherwise; do not assume another agent's paraphrase of that exchange is complete. Returned messages include durable attachments that can be opened with read_attachment. timeoutSeconds is capped at 60: longer single calls become unreliable over the stdio transport. To honor a 'stay listening' request, call this again immediately in a tight silent loop (no reply text between calls) each time it returns timedOut=true, accumulating elapsed time across calls yourself. Only break silence to report back once a real message arrives, or once about 10 minutes have passed with nothing but timeouts, at which point register_agent with status 'away' and tell the user you disconnected after 10 minutes of inactivity. Narrating every empty timeout defeats the point of this loop.", {
   topicId: z.string(), agentId: agentIdSchema.optional(), since: z.string().datetime().optional(),
   agentName: z.string().optional(), model: z.string().optional(),
-  timeoutSeconds: z.number().int().min(1).max(300).optional(),
+  timeoutSeconds: z.number().int().min(1).max(60).optional(),
 }, async ({ topicId, agentId, agentName, model, since, timeoutSeconds }) => {
   const deadline = Date.now() + (timeoutSeconds || 60) * 1000;
   const cursor = since || new Date().toISOString();
-  if (agentId) {
-    const registered = (await client.listAgents()).find((agent) => agent.id === agentId);
-    if (registered?.status === "offline") return result({ timedOut: false, disconnected: true, cursor, messages: [] });
-    setActivePresence({ id: agentId, name: agentName || registered?.name || agentId, model: model || registered?.model, status: "listening" });
-    await sendPresenceHeartbeat();
-  }
-  while (Date.now() < deadline) {
-    const messages = await client.listMessages(topicId, cursor);
-    const relevant = agentId ? messages.filter((message) =>
-      message.mentions.includes(agentId) || message.mentions.includes("tous") || message.mentions.includes("all"),
-    ) : messages;
-    if (relevant.length) {
-      if (agentId) {
-        setActivePresence({ id: agentId, name: agentName || agentId, model, status: "working" });
-        await sendPresenceHeartbeat();
-      }
-      return result({ timedOut: false, disconnected: false, cursor: relevant.at(-1)?.createdAt, messages: relevant });
-    }
+  activeListenCalls += 1;
+  try {
     if (agentId) {
-      const agent = (await client.listAgents()).find((candidate) => candidate.id === agentId);
-      if (agent?.status === "offline") {
-        clearActivePresence(agentId);
-        return result({ timedOut: false, disconnected: true, cursor, messages: [] });
-      }
-      const tasks = (await client.listTasks({ activeOnly: true }))
-        .filter((task) => !task.assignedAgentId || task.assignedAgentId === agentId)
-        .filter((task) => task.status === "pending" || task.status === "waiting_for_input");
-      if (tasks.length) {
-        setActivePresence({ id: agentId, name: agentName || agentId, model, status: "working" });
-        await sendPresenceHeartbeat();
-        return result({ timedOut: false, disconnected: false, cursor, messages: [], tasks });
-      }
+      const registered = (await client.listAgents()).find((agent) => agent.id === agentId);
+      if (registered?.status === "offline") return result({ timedOut: false, disconnected: true, cursor, messages: [] });
+      setActivePresence({ id: agentId, name: agentName || registered?.name || agentId, model: model || registered?.model, status: "listening" });
+      await sendPresenceHeartbeat();
     }
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    while (Date.now() < deadline) {
+      const messages = await client.listMessages(topicId, cursor);
+      // Mentions only decide WHEN to wake up (so a busy topic doesn't fire on every unrelated
+      // reply). Once woken, return every message since the last checkpoint, not just the ones that
+      // mention this agent — otherwise an exchange between other participants that never mentions
+      // this agent is silently skipped forever, even though it's part of the same conversation.
+      const relevant = agentId ? messages.filter((message) =>
+        message.mentions.includes(agentId) || message.mentions.includes("tous") || message.mentions.includes("all"),
+      ) : messages;
+      if (relevant.length) {
+        if (agentId) {
+          setActivePresence({ id: agentId, name: agentName || agentId, model, status: "working" });
+          await sendPresenceHeartbeat();
+        }
+        return result({ timedOut: false, disconnected: false, cursor: messages.at(-1)?.createdAt, messages });
+      }
+      if (agentId) {
+        const agent = (await client.listAgents()).find((candidate) => candidate.id === agentId);
+        if (agent?.status === "offline") {
+          clearActivePresence(agentId);
+          return result({ timedOut: false, disconnected: true, cursor, messages: [] });
+        }
+        const tasks = (await client.listTasks({ activeOnly: true }))
+          .filter((task) => !task.assignedAgentId || task.assignedAgentId === agentId)
+          .filter((task) => task.status === "pending" || task.status === "waiting_for_input");
+        if (tasks.length) {
+          setActivePresence({ id: agentId, name: agentName || agentId, model, status: "working" });
+          await sendPresenceHeartbeat();
+          return result({ timedOut: false, disconnected: false, cursor, messages: [], tasks });
+        }
+      }
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    }
+    return result({ timedOut: true, disconnected: false, cursor, messages: [] });
+  } finally {
+    // Do not flip to "away" the instant this call returns: a caller looping wait_for_messages
+    // (return -> pick next call -> call again) needs a brief gap to be tolerated, or every cycle
+    // flickers listening/away/listening. The periodic heartbeat above already stops refreshing
+    // once activeListenCalls hits 0, so a caller that genuinely stops gets caught by the server's
+    // own presenceStaleAfterMs window (store.ts) instead of an instant, flicker-prone flip here.
+    activeListenCalls = Math.max(0, activeListenCalls - 1);
   }
-  return result({ timedOut: true, disconnected: false, cursor, messages: [] });
 });
 server.tool("register_agent", "Register or refresh an agent presence at the table. Every agent must declare its actual runtime identity and model; never reuse a default or previously observed model name.", {
   id: agentIdSchema.describe("Stable lowercase agent id, for example codex, claude, or expert."),

@@ -1,0 +1,24 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Consilium: Start",
+      "type": "npm",
+      "script": "dev",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "presentation": {
+        "reveal": "always",
+        "focus": true,
+        "panel": "dedicated",
+        "showReuseMessage": true,
+        "clear": true
+      },
+      "runOptions": {
+        "instanceLimit": 1
+      },
+      "problemMatcher": []
+    }
+  ]
+}
