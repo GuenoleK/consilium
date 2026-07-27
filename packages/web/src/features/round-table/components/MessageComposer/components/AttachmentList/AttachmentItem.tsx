@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { Icon } from "../../../../../../shared/components/Icon/Icon";
 
 const formatSize = (size: number) => {
@@ -19,8 +20,17 @@ const fileKind = (file: File) => {
 
 export function AttachmentItem({ file, onRemove }: { file: File; onRemove: () => void }) {
   const kind = fileKind(file);
+  const [previewUrl, setPreviewUrl] = useState<string>();
+
+  useEffect(() => {
+    if (!file.type.startsWith("image/")) return;
+    const url = URL.createObjectURL(file);
+    setPreviewUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [file]);
+
   return <li className="attachment-list__item">
-    <span className="attachment-list__icon"><Icon name={kind.icon} /></span>
+    {previewUrl ? <img className="attachment-list__preview" src={previewUrl} alt="" /> : <span className="attachment-list__icon"><Icon name={kind.icon} /></span>}
     <span className="attachment-list__copy">
       <strong title={file.name}>{file.name}</strong>
       <small>{kind.label} · {formatSize(file.size)}</small>
