@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { homedir } from "node:os";
-import type { Agent, ApprovalRequest, Attachment, ConsiliumSnapshot, ConsiliumTask, Message, RiskLevel, TaskStatus, Topic } from "@consilium/core";
+import type { Agent, ApprovalRequest, Attachment, AuthorizationRequest, ConsiliumSnapshot, ConsiliumTask, Message, RiskLevel, TaskStatus, Topic } from "@consilium/core";
 
 const now = () => new Date().toISOString();
 const activeAgentStatuses = new Set<Agent["status"]>(["online", "listening", "working"]);
@@ -39,6 +39,7 @@ const initialSnapshot = (): ConsiliumSnapshot => {
     agents: [],
     attachments: [],
     tasks: [],
+    authorizations: [],
   };
 };
 
@@ -59,6 +60,7 @@ export class ConsiliumStore {
       this.snapshot = JSON.parse(await readFile(this.filePath, "utf8")) as ConsiliumSnapshot;
       this.snapshot.attachments ??= [];
       this.snapshot.tasks ??= [];
+      this.snapshot.authorizations ??= [];
       this.snapshot.messages = this.snapshot.messages.map((message) => ({ ...message, attachments: message.attachments ?? [] }));
       const agentCountBeforeMigration = this.snapshot.agents.length;
       this.snapshot.agents = this.snapshot.agents.filter((agent) => !(
@@ -106,6 +108,7 @@ export class ConsiliumStore {
     await this.removeTopicAttachments(id);
     this.snapshot.messages = this.snapshot.messages.filter((message) => message.topicId !== id);
     this.snapshot.tasks = this.snapshot.tasks.filter((task) => task.topicId !== id);
+    this.snapshot.authorizations = this.snapshot.authorizations.filter((authorization) => authorization.topicId !== id);
     topic.messageCount = 0;
     topic.participantIds = [];
     topic.updatedAt = now();
@@ -121,6 +124,7 @@ export class ConsiliumStore {
     this.snapshot.topics = this.snapshot.topics.filter((topic) => topic.id !== id);
     this.snapshot.messages = this.snapshot.messages.filter((message) => message.topicId !== id);
     this.snapshot.tasks = this.snapshot.tasks.filter((task) => task.topicId !== id);
+    this.snapshot.authorizations = this.snapshot.authorizations.filter((authorization) => authorization.topicId !== id);
     await this.persist();
     return true;
   }
@@ -353,5 +357,55 @@ export class ConsiliumStore {
   async cancelTask(id: string, requestedBy: string) {
     const task = await this.updateTask(id, { status: "cancelled", error: `Cancelled by ${requestedBy}` });
     return task;
+  }
+
+  async listAuthorizations(topicId: string) {
+    await this.ensureLoaded();
+    return this.snapshot.authorizations
+      .filter((authorization) => authorization.topicId === topicId)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+
+  async getAuthorization(id: string) {
+    await this.ensureLoaded();
+    return this.snapshot.authorizations.find((authorization) => authorization.id === id);
+  }
+
+  async createAuthorization(input: Pick<AuthorizationRequest, "topicId" | "kind" | "action" | "details" | "requestedBy" | "requestedByName">) {
+    await this.ensureLoaded();
+    if (!this.snapshot.topics.some((topic) => topic.id === input.topicId)) throw new Error("Topic not found");
+    const authorization: AuthorizationRequest = {
+      id: randomUUID(), ...input, status: "pending", createdAt: now(),
+    };
+    this.snapshot.authorizations.push(authorization);
+    await this.persist();
+    return authorization;
+  }
+
+  async resolveAuthorization(id: string, input: { decision: "approved" | "rejected"; resolvedBy: string; decisionNote?: string }) {
+    await this.ensureLoaded();
+    const authorization = this.snapshot.authorizations.find((candidate) => candidate.id === id);
+    if (!authorization) return undefined;
+    if (authorization.status !== "pending") throw new Error("Authorization has already been resolved");
+    authorization.status = input.decision;
+    authorization.resolvedAt = now();
+    authorization.resolvedBy = input.resolvedBy;
+    authorization.decisionNote = input.decisionNote;
+    await this.persist();
+    return authorization;
+  }
+
+  async consumeAuthorization(id: string, input: { topicId: string; requestedBy: string; kind: string }) {
+    await this.ensureLoaded();
+    const authorization = this.snapshot.authorizations.find((candidate) => candidate.id === id);
+    if (!authorization) return undefined;
+    if (authorization.status !== "approved") throw new Error("Authorization has not been approved");
+    if (authorization.consumedAt) throw new Error("Authorization has already been used");
+    if (authorization.topicId !== input.topicId || authorization.requestedBy !== input.requestedBy || authorization.kind !== input.kind) {
+      throw new Error("Authorization does not cover this action");
+    }
+    authorization.consumedAt = now();
+    await this.persist();
+    return authorization;
   }
 }

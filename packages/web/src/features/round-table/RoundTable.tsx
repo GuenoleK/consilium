@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { Agent, ConsiliumTask, Message, Topic } from "@consilium/core";
+import type { Agent, AuthorizationRequest, ConsiliumTask, Message, Topic } from "@consilium/core";
 import { api } from "../../core/api";
 import { Icon } from "../../shared/components/Icon/Icon";
 import { AgentPanel } from "./components/AgentPanel/AgentPanel";
+import { AuthorizationBubble } from "./components/AuthorizationBubble/AuthorizationBubble";
 import { ConversationActions } from "./components/ConversationActions/ConversationActions";
 import { MessageComposer } from "./components/MessageComposer/MessageComposer";
 import { MessageList } from "./components/MessageList/MessageList";
@@ -32,6 +33,12 @@ const sameTasks = (current: ConsiliumTask[], next: ConsiliumTask[]) =>
   current.length === next.length && current.every((task, index) =>
     next[index]?.id === task.id && next[index]?.updatedAt === task.updatedAt);
 
+const sameAuthorizations = (current: AuthorizationRequest[], next: AuthorizationRequest[]) =>
+  current.length === next.length && current.every((authorization, index) =>
+    next[index]?.id === authorization.id
+      && next[index]?.status === authorization.status
+      && next[index]?.consumedAt === authorization.consumedAt);
+
 const sameTopics = (current: Topic[], next: Topic[]) =>
   current.length === next.length && current.every((topic, index) => {
     const candidate = next[index];
@@ -47,6 +54,7 @@ export function RoundTable() {
   const [hasMoreMessagesBefore, setHasMoreMessagesBefore] = useState(false);
   const [loadingOlderMessages, setLoadingOlderMessages] = useState(false);
   const [tasks, setTasks] = useState<ConsiliumTask[]>([]);
+  const [authorizations, setAuthorizations] = useState<AuthorizationRequest[]>([]);
   const [activeId, setActiveId] = useState<string>();
   const [error, setError] = useState("");
   const [mobilePanel, setMobilePanel] = useState<"topics" | "agents">();
@@ -88,12 +96,16 @@ export function RoundTable() {
     const next = await api.tasks(topicId);
     setTasks((current) => sameTasks(current, next) ? current : next);
   }, []);
+  const refreshAuthorizations = useCallback(async (topicId: string) => {
+    const next = await api.authorizations(topicId);
+    setAuthorizations((current) => sameAuthorizations(current, next) ? current : next);
+  }, []);
   const syncAll = useCallback(async () => {
     const [nextTopics, nextAgents] = await Promise.all([api.topics(), api.agents()]);
     setTopics((current) => sameTopics(current, nextTopics) ? current : nextTopics);
     setAgents((current) => sameAgents(current, nextAgents) ? current : nextAgents);
-    if (activeId) await Promise.all([loadInitialMessages(activeId), refreshTasks(activeId)]);
-  }, [activeId, loadInitialMessages, refreshTasks]);
+    if (activeId) await Promise.all([loadInitialMessages(activeId), refreshTasks(activeId), refreshAuthorizations(activeId)]);
+  }, [activeId, loadInitialMessages, refreshAuthorizations, refreshTasks]);
 
   useEffect(() => {
     void Promise.all([api.topics(), api.agents()]).then(([nextTopics, nextAgents]) => {
@@ -106,16 +118,18 @@ export function RoundTable() {
     let timer: number | undefined;
     setMessages([]);
     setHasMoreMessagesBefore(false);
-    void Promise.all([loadInitialMessages(activeId), refreshTasks(activeId)]).then(() => {
+    setAuthorizations([]);
+    void Promise.all([loadInitialMessages(activeId), refreshTasks(activeId), refreshAuthorizations(activeId)]).then(() => {
       if (cancelled) return;
       timer = window.setInterval(() => {
         void refreshMessages(activeId);
         void refreshAgents();
         void refreshTasks(activeId);
+        void refreshAuthorizations(activeId);
       }, 3000);
     });
     return () => { cancelled = true; if (timer) window.clearInterval(timer); };
-  }, [activeId, loadInitialMessages, refreshAgents, refreshMessages, refreshTasks]);
+  }, [activeId, loadInitialMessages, refreshAgents, refreshAuthorizations, refreshMessages, refreshTasks]);
 
   const loadOlderMessages = useCallback(async () => {
     const topicId = activeIdRef.current;
@@ -179,6 +193,11 @@ export function RoundTable() {
     await api.cancelTask(taskId);
     await refreshTasks(activeId);
   };
+  const resolveAuthorization = async (authorizationId: string, decision: "approved" | "rejected") => {
+    if (!activeId) return;
+    await api.resolveAuthorization(authorizationId, decision);
+    await refreshAuthorizations(activeId);
+  };
 
   const closeMobilePanel = () => setMobilePanel(undefined);
 
@@ -191,7 +210,10 @@ export function RoundTable() {
         <button className="round-table__mobile-participants" onClick={() => setMobilePanel("agents")} aria-label="Afficher les participants"><Icon name="group" /></button>
       </header>
       {error ? <div className="round-table__error"><Icon name="cloud_off" />{error}</div> : <MessageList messages={messages} hasMoreBefore={hasMoreMessagesBefore} loadingOlder={loadingOlderMessages} onLoadOlder={loadOlderMessages} />}
-      <MessageComposer agents={agents} disabled={!activeId || Boolean(error)} onSend={sendMessage} />
+      <div className="round-table__composer-area">
+        <AuthorizationBubble requests={authorizations} onResolve={resolveAuthorization} />
+        <MessageComposer agents={agents} disabled={!activeId || Boolean(error)} onSend={sendMessage} />
+      </div>
     </section>
     <AgentPanel
       agents={agents}

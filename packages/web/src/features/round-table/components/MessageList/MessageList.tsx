@@ -11,7 +11,7 @@ const renderAttachment = (attachment: Message["attachments"][number]) => {
   if (attachment.mediaType.startsWith("image/")) return <a className="message-list__media message-list__media--image" href={url} target="_blank" rel="noreferrer"><img src={url} alt={attachment.name} loading="lazy" decoding="async" /><span>{attachment.name}</span></a>;
   if (attachment.mediaType.startsWith("video/")) return <div className="message-list__media"><video src={url} controls preload="none" /><a href={url} target="_blank" rel="noreferrer">{attachment.name}</a></div>;
   if (attachment.mediaType.startsWith("audio/")) return <div className="message-list__media"><audio src={url} controls preload="metadata" /><a href={url} target="_blank" rel="noreferrer">{attachment.name}</a></div>;
-  return <a className="message-list__file" href={url} target="_blank" rel="noreferrer" title={`Télécharger ${attachment.name}`}>
+  return <a className="message-list__file" href={api.attachmentUrl(attachment.id, true)} download title={`Télécharger ${attachment.name}`}>
     <Icon name="draft" />
     <strong>{attachment.name}</strong>
     <span><small>{fileExtension(attachment.name)}</small><small>{Math.ceil(attachment.size / 1024)} Ko</small></span>

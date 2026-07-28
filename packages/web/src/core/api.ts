@@ -1,4 +1,4 @@
-import type { Agent, Attachment, ConsiliumTask, Message, Topic } from "@consilium/core";
+import type { Agent, Attachment, AuthorizationRequest, ConsiliumTask, Message, Topic } from "@consilium/core";
 
 export interface MessagePage {
   messages: Message[];
@@ -33,7 +33,12 @@ export const api = {
     if (!response.ok) throw new Error(await response.text());
     return response.json() as Promise<Attachment>;
   },
-  attachmentUrl: (attachmentId: string) => `${baseUrl}/attachments/${attachmentId}`,
+  attachmentUrl: (attachmentId: string, download = false) => `${baseUrl}/attachments/${attachmentId}${download ? "?download=1" : ""}`,
+  authorizations: (topicId: string) => request<AuthorizationRequest[]>(`/topics/${topicId}/authorizations`),
+  resolveAuthorization: (authorizationId: string, decision: "approved" | "rejected", decisionNote?: string) =>
+    request<AuthorizationRequest>(`/authorizations/${authorizationId}/resolve`, {
+      method: "POST", body: JSON.stringify({ decision, resolvedBy: "human", decisionNote }),
+    }),
   disconnectAgent: (agentId: string) => request<Agent>(`/agents/${agentId}/disconnect`, { method: "POST" }),
   tasks: (topicId: string) => request<ConsiliumTask[]>(`/tasks?topicId=${encodeURIComponent(topicId)}`),
   createTask: (input: { topicId: string; title: string; description: string; assignedAgentId?: string }) =>

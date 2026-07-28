@@ -29,6 +29,18 @@ export function MessageComposer({ agents, disabled, onSend }: { agents: Agent[];
     setFiles((current) => [...current, ...accepted]);
     setFileError(accepted.length === candidates.length ? "" : "Un fichier dépasse la limite de 25 Mo.");
   };
+  const handlePaste = (event: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    if (disabled || isSending) return;
+    const pastedImages = Array.from(event.clipboardData.items)
+      .filter((item) => item.kind === "file" && item.type.startsWith("image/"))
+      .flatMap((item) => {
+        const file = item.getAsFile();
+        return file ? [file] : [];
+      });
+    if (!pastedImages.length) return;
+    event.preventDefault();
+    addFiles(pastedImages);
+  };
   const updateMentionContext = (value: string, cursor: number) => {
     const match = value.slice(0, cursor).match(/(?:^|\s)@([\p{L}\p{N}_-]*)$/u);
     setMentionContext(match ? { start: cursor - match[1].length - 1, end: cursor, query: match[1].toLowerCase() } : undefined);
@@ -85,6 +97,7 @@ export function MessageComposer({ agents, disabled, onSend }: { agents: Agent[];
         disabled={disabled || isSending}
         onChange={(event) => { setBody(event.target.value); updateMentionContext(event.target.value, event.target.selectionStart); }}
         onClick={(event) => updateMentionContext(event.currentTarget.value, event.currentTarget.selectionStart)}
+        onPaste={handlePaste}
         onKeyDown={(event) => {
           if (mentionContext && mentionAgents.length) {
             if (event.key === "ArrowDown" || event.key === "ArrowUp") {

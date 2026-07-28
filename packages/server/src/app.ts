@@ -60,13 +60,44 @@ export const createApp = (store = new ConsiliumStore()) => {
   app.get("/api/attachments/:id", async (context) => {
     const found = await store.getAttachment(context.req.param("id"));
     if (!found) return context.json({ error: "Attachment not found" }, 404);
+    const disposition = context.req.query("download") === "1" ? "attachment" : "inline";
     return new Response(found.data, {
       headers: {
         "content-type": found.attachment.mediaType,
         "content-length": String(found.attachment.size),
-        "content-disposition": `inline; filename*=UTF-8''${encodeURIComponent(found.attachment.name)}`,
+        "content-disposition": `${disposition}; filename*=UTF-8''${encodeURIComponent(found.attachment.name)}`,
       },
     });
+  });
+  app.get("/api/topics/:id/authorizations", async (context) => context.json(await store.listAuthorizations(context.req.param("id"))));
+  app.post("/api/topics/:id/authorizations", async (context) => {
+    const input = z.object({
+      kind: z.string().trim().min(1).max(80), action: z.string().trim().min(1).max(160), details: z.string().trim().min(1).max(2_000),
+      requestedBy: z.string().min(1), requestedByName: z.string().trim().min(1).max(80),
+    }).parse(await context.req.json());
+    return context.json(await store.createAuthorization({ ...input, topicId: context.req.param("id") }), 201);
+  });
+  app.get("/api/authorizations/:id", async (context) => {
+    const authorization = await store.getAuthorization(context.req.param("id"));
+    return authorization ? context.json(authorization) : context.json({ error: "Authorization not found" }, 404);
+  });
+  app.post("/api/authorizations/:id/resolve", async (context) => {
+    const input = z.object({ decision: z.enum(["approved", "rejected"]), resolvedBy: z.string().min(1), decisionNote: z.string().max(2_000).optional() }).parse(await context.req.json());
+    try {
+      const authorization = await store.resolveAuthorization(context.req.param("id"), input);
+      return authorization ? context.json(authorization) : context.json({ error: "Authorization not found" }, 404);
+    } catch (error) {
+      return context.json({ error: error instanceof Error ? error.message : String(error) }, 409);
+    }
+  });
+  app.post("/api/authorizations/:id/consume", async (context) => {
+    const input = z.object({ topicId: z.string().min(1), requestedBy: z.string().min(1), kind: z.string().min(1) }).parse(await context.req.json());
+    try {
+      const authorization = await store.consumeAuthorization(context.req.param("id"), input);
+      return authorization ? context.json(authorization) : context.json({ error: "Authorization not found" }, 404);
+    } catch (error) {
+      return context.json({ error: error instanceof Error ? error.message : String(error) }, 409);
+    }
   });
   app.get("/api/agents", async (context) => context.json(await store.listAgents()));
   app.post("/api/agents", async (context) => {

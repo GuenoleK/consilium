@@ -1,0 +1,4 @@
+interface:
+  display_name: "Accès distant Consilium"
+  short_description: "Gérer le tunnel sans processus orphelin"
+  default_prompt: "Utilise $consilium-remote-access pour ouvrir ou fermer proprement l'accès distant à Consilium."

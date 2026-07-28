@@ -4,6 +4,7 @@ export const participantKindSchema = z.enum(["human", "agent", "system"]);
 export const agentStatusSchema = z.enum(["online", "listening", "working", "away", "offline"]);
 export const taskStatusSchema = z.enum(["pending", "claimed", "running", "awaiting_approval", "waiting_for_input", "completed", "failed", "cancelled"]);
 export const approvalStatusSchema = z.enum(["pending", "approved", "rejected"]);
+export const authorizationStatusSchema = z.enum(["pending", "approved", "rejected"]);
 export const riskLevelSchema = z.enum(["free", "confirmation", "restricted"]);
 
 export const attachmentSchema = z.object({
@@ -69,6 +70,22 @@ export const approvalRequestSchema = z.object({
   decisionNote: z.string().optional(),
 });
 
+export const authorizationRequestSchema = z.object({
+  id: z.string(),
+  topicId: z.string(),
+  kind: z.string().min(1).max(80),
+  action: z.string(),
+  details: z.string(),
+  requestedBy: z.string(),
+  requestedByName: z.string(),
+  status: authorizationStatusSchema,
+  createdAt: z.string(),
+  resolvedAt: z.string().optional(),
+  resolvedBy: z.string().optional(),
+  decisionNote: z.string().optional(),
+  consumedAt: z.string().optional(),
+});
+
 export const taskSchema = z.object({
   id: z.string(),
   clientRequestId: z.string().optional(),
@@ -95,6 +112,7 @@ export type Attachment = z.infer<typeof attachmentSchema>;
 export type ConsiliumTask = z.infer<typeof taskSchema>;
 export type TaskInstruction = z.infer<typeof taskInstructionSchema>;
 export type ApprovalRequest = z.infer<typeof approvalRequestSchema>;
+export type AuthorizationRequest = z.infer<typeof authorizationRequestSchema>;
 export type TaskStatus = z.infer<typeof taskStatusSchema>;
 export type RiskLevel = z.infer<typeof riskLevelSchema>;
 
@@ -104,4 +122,5 @@ export interface ConsiliumSnapshot {
   agents: Agent[];
   attachments: Attachment[];
   tasks: ConsiliumTask[];
+  authorizations: AuthorizationRequest[];
 }

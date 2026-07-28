@@ -1,4 +1,6 @@
-import type { Agent, Attachment, ConsiliumTask, Message, RiskLevel, TaskStatus, Topic } from "@consilium/core";
+import type { Agent, Attachment, AuthorizationRequest, ConsiliumTask, Message, RiskLevel, TaskStatus, Topic } from "@consilium/core";
+import { readFile } from "node:fs/promises";
+import { basename } from "node:path";
 
 export class ConsiliumClient {
   constructor(private readonly baseUrl = process.env.CONSILIUM_API_URL || "http://127.0.0.1:4337") {}
@@ -28,11 +30,27 @@ export class ConsiliumClient {
     const query = since ? `?since=${encodeURIComponent(since)}` : "";
     return this.request<Message[]>(`/api/topics/${topicId}/messages${query}`);
   }
-  postMessage(topicId: string, body: string, agentId: string, agentName: string) {
+  postMessage(topicId: string, body: string, agentId: string, agentName: string, attachmentIds: string[] = []) {
     return this.request<Message>(`/api/topics/${topicId}/messages`, {
       method: "POST",
-      body: JSON.stringify({ body, authorId: agentId, authorName: agentName, authorKind: "agent" }),
+      body: JSON.stringify({ body, authorId: agentId, authorName: agentName, authorKind: "agent", attachmentIds }),
     });
+  }
+  async uploadAttachment(topicId: string, filePath: string, mediaType?: string) {
+    const data = await readFile(filePath);
+    if (data.byteLength > 25 * 1024 * 1024) throw new Error("File exceeds 25 MB");
+    const form = new FormData();
+    form.set("file", new File([data], basename(filePath), { type: mediaType || "application/octet-stream" }));
+    const response = await fetch(`${this.baseUrl}/api/topics/${topicId}/attachments`, { method: "POST", body: form });
+    if (!response.ok) throw new Error(`Consilium API: ${response.status} ${await response.text()}`);
+    return response.json() as Promise<Attachment>;
+  }
+  requestAuthorization(topicId: string, input: Pick<AuthorizationRequest, "kind" | "action" | "details" | "requestedBy" | "requestedByName">) {
+    return this.request<AuthorizationRequest>(`/api/topics/${topicId}/authorizations`, { method: "POST", body: JSON.stringify(input) });
+  }
+  getAuthorization(id: string) { return this.request<AuthorizationRequest>(`/api/authorizations/${id}`); }
+  consumeAuthorization(id: string, input: { topicId: string; requestedBy: string; kind: string }) {
+    return this.request<AuthorizationRequest>(`/api/authorizations/${id}/consume`, { method: "POST", body: JSON.stringify(input) });
   }
   listAgents() { return this.request<Agent[]>("/api/agents"); }
   registerAgent(input: { id: string; name: string; model?: string; status: Agent["status"] }) {

@@ -35,12 +35,12 @@ Variables utiles : `CONSILIUM_API_URL`, `CONSILIUM_PORT` et `CONSILIUM_DATA_DIR`
 ## Outils MCP
 
 - `list_topics`, `create_topic`, `get_topic`, `reset_topic`, `delete_topic`
-- `post_message`, `list_messages`, `wait_for_messages`, `read_attachment`
+- `post_message`, `request_authorization`, `get_authorization`, `post_attachment`, `list_messages`, `wait_for_messages`, `read_attachment`
 - `register_agent`, `list_agents`, `disconnect_agent`
 - `create_task`, `list_tasks`, `get_task`, `claim_task`, `update_task_status`
 - `add_task_instruction`, `request_approval`, `resolve_approval`, `cancel_task`
 
-Chaque agent se déclare, lit les messages qui lui sont adressés, puis répond dans le même sujet. Le contexte reste ainsi visible pour les autres participants.
+Chaque agent se déclare, lit les messages qui lui sont adressés, puis répond dans le même sujet. Le contexte reste ainsi visible pour les autres participants. Une action qui nécessite un accord humain passe par `request_authorization` : elle apparaît dans une bulle dédiée au-dessus du champ de message, puis peut être autorisée ou refusée. Le partage de fichier exige systématiquement une autorisation `file_attachment` approuvée et à usage unique avant `post_attachment` (25 Mo maximum). Le fichier est envoyé directement à l’API, joint au message et stocké dans les données Consilium, hors du dépôt. Les liens de fichiers téléchargent le contenu par `/api/attachments/:id?download=1`, en local comme à travers le gateway du tunnel.
 
 ## Écoute continue
 

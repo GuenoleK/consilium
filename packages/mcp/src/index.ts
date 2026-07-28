@@ -90,6 +90,27 @@ server.tool("post_message", "Post an agent reply or request into a topic. It als
     messages: messagesSinceRead.filter((candidate) => candidate.id !== message.id),
   });
 });
+server.tool("request_authorization", "Ask the human for an authorization in a topic. The request appears above the message composer and stays pending until it is approved or rejected. Use kind 'file_attachment' before every outgoing file.", {
+  topicId: z.string(), kind: z.string().trim().min(1).max(80), action: z.string().trim().min(1).max(160), details: z.string().trim().min(1).max(2_000),
+  agentId: agentIdSchema, agentName: z.string().min(1),
+}, async ({ topicId, kind, action, details, agentId, agentName }) => result(await client.requestAuthorization(topicId, {
+  kind, action, details, requestedBy: agentId, requestedByName: agentName,
+})));
+server.tool("get_authorization", "Read the current decision for an authorization request. Wait for its status to become approved before taking the authorized action.", {
+  authorizationId: z.string(),
+}, async ({ authorizationId }) => result(await client.getAuthorization(authorizationId)));
+server.tool("post_attachment", "Attach a local file to a new agent message in a topic, after a human has approved a matching file_attachment authorization. Never send a file before requesting and receiving this authorization. The file must be accessible to this agent and no larger than 25 MB.", {
+  topicId: z.string(), filePath: z.string().min(1), mediaType: z.string().min(1).optional(),
+  body: z.string().min(1).optional(), authorizationId: z.string(), agentId: agentIdSchema, agentName: z.string().min(1),
+}, async ({ topicId, filePath, mediaType, body, authorizationId, agentId, agentName }) => {
+  await client.consumeAuthorization(authorizationId, { topicId, requestedBy: agentId, kind: "file_attachment" });
+  const attachment = await client.uploadAttachment(topicId, filePath, mediaType);
+  const message = await client.postMessage(topicId, body || `Voici le fichier demandé : ${attachment.name}`, agentId, agentName, [attachment.id]);
+  rememberCursor(topicId, message.createdAt);
+  setActivePresence({ id: agentId, name: agentName, status: "listening" });
+  await sendPresenceHeartbeat();
+  return result({ message, attachment });
+});
 server.tool("list_messages", "List topic messages, optionally after an ISO timestamp. Each message includes durable attachment metadata; call read_attachment with its id to access the file.", {
   topicId: z.string(), since: z.string().datetime().optional(),
 }, async ({ topicId, since }) => {

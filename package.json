@@ -14,6 +14,7 @@
     "remote:status": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/remote-access.ps1 status",
     "remote:stop": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/remote-access.ps1 stop",
     "remote:gateway": "node packages/server/dist/remoteGateway.js",
+    "remote:cloudflare": "npm run build -w @consilium/server && concurrently -n gateway,tunnel -c magenta,green \"npm:remote:gateway\" \"cloudflared tunnel --url http://127.0.0.1:8484 --no-autoupdate\"",
     "remote:temporary-app": "concurrently -n server,web,gateway -c yellow,cyan,green \"npm:dev:server\" \"npm:dev:web\" \"npm:remote:gateway\"",
     "build": "npm run build -w @consilium/core && npm run build -w @consilium/server && npm run build -w @consilium/mcp && npm run build -w @consilium/web",
     "typecheck": "npm run build -w @consilium/core && npm run typecheck --workspaces --if-present",

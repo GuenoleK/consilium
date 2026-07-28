@@ -19,6 +19,25 @@
         "instanceLimit": 1
       },
       "problemMatcher": []
+    },
+    {
+      "label": "Consilium: Remote Access",
+      "type": "npm",
+      "script": "remote:cloudflare",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "presentation": {
+        "reveal": "always",
+        "focus": true,
+        "panel": "dedicated",
+        "showReuseMessage": true,
+        "clear": true
+      },
+      "runOptions": {
+        "instanceLimit": 1
+      },
+      "problemMatcher": []
     }
   ]
 }

@@ -8,6 +8,7 @@
   &__actions button { display: grid; place-items: center; width: 34px; height: 34px; border: 0; border-radius: 10px; background: transparent; color: var(--cs-color-text-muted); &:hover { background: var(--cs-color-surface-soft); } }
   &__mobile-nav, &__mobile-participants, &__mobile-backdrop { display: none; }
   &__error { align-self: center; justify-self: center; display: flex; align-items: center; gap: 9px; max-width: 390px; padding: 16px; border-radius: var(--cs-radius-md); background: var(--cs-color-accent-soft); color: var(--cs-color-accent-strong); font-size: 12px; }
+  &__composer-area { min-width: 0; }
 }
 @media (max-width: 1050px) { .round-table { grid-template-columns: 230px minmax(0, 1fr); } .agent-panel { display: none; } }
 @media (max-width: 720px) {

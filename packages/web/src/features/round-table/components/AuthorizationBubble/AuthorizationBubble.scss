@@ -1,0 +1,25 @@
+.authorization-bubble {
+  display: grid; gap: 8px; max-width: 780px; margin: 10px auto 0; padding: 0 clamp(20px, 5vw, 70px); pointer-events: none;
+  &__request { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 11px; padding: 11px 12px; border: 1px solid #ddc19f; border-radius: 15px; background: rgba(255, 250, 243, .98); box-shadow: 0 10px 24px rgba(100, 67, 43, .11); pointer-events: auto; }
+  &__icon { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 11px; background: var(--cs-color-accent-soft); color: var(--cs-color-accent-strong); .icon { font-size: 19px; } }
+  &__content { min-width: 0; }
+  &__content > p:first-child { display: flex; align-items: center; gap: 6px; margin: 0 0 3px; color: var(--cs-color-accent-strong); font-size: 9px; line-height: 1.2; letter-spacing: .05em; text-transform: uppercase; }
+  &__content > p:first-child span { color: var(--cs-color-text-muted); font-weight: 700; }
+  h2 { overflow: hidden; margin: 0; color: var(--cs-color-text); font: 700 12px/1.25 var(--cs-font-heading); text-overflow: ellipsis; white-space: nowrap; }
+  &__details { margin: 3px 0 0; color: var(--cs-color-text-muted); font-size: 10px; line-height: 1.35; }
+  &__actions { display: flex; align-items: center; gap: 6px; }
+  &__actions button { min-height: 30px; padding: 0 10px; border-radius: 9px; font-size: 10px; font-weight: 700; }
+  &__reject { border: 1px solid var(--cs-color-border); background: transparent; color: var(--cs-color-text-muted); }
+  &__approve { display: flex; align-items: center; justify-content: center; gap: 3px; border: 1px solid var(--cs-color-green); background: var(--cs-color-green); color: white; .icon { font-size: 15px; } }
+  button:disabled { cursor: wait; opacity: .62; }
+}
+@media (max-width: 720px) {
+  .authorization-bubble {
+    margin-top: 6px; padding: 0 10px;
+    &__request { grid-template-columns: auto minmax(0, 1fr); gap: 9px; padding: 10px; border-radius: 13px; }
+    &__icon { width: 31px; height: 31px; }
+    h2 { font-size: 11px; }
+    &__details { font-size: 9px; }
+    &__actions { grid-column: 1 / -1; justify-content: flex-end; padding-top: 1px; }
+  }
+}
