@@ -8,8 +8,8 @@ const time = (value: string) => new Intl.DateTimeFormat("fr", { hour: "2-digit",
 const fileExtension = (name: string) => name.includes(".") ? name.split(".").pop()?.toUpperCase() : "FICHIER";
 const renderAttachment = (attachment: Message["attachments"][number]) => {
   const url = api.attachmentUrl(attachment.id);
-  if (attachment.mediaType.startsWith("image/")) return <a className="message-list__media message-list__media--image" href={url} target="_blank" rel="noreferrer"><img src={url} alt={attachment.name} /><span>{attachment.name}</span></a>;
-  if (attachment.mediaType.startsWith("video/")) return <div className="message-list__media"><video src={url} controls preload="metadata" /><a href={url} target="_blank" rel="noreferrer">{attachment.name}</a></div>;
+  if (attachment.mediaType.startsWith("image/")) return <a className="message-list__media message-list__media--image" href={url} target="_blank" rel="noreferrer"><img src={url} alt={attachment.name} loading="lazy" decoding="async" /><span>{attachment.name}</span></a>;
+  if (attachment.mediaType.startsWith("video/")) return <div className="message-list__media"><video src={url} controls preload="none" /><a href={url} target="_blank" rel="noreferrer">{attachment.name}</a></div>;
   if (attachment.mediaType.startsWith("audio/")) return <div className="message-list__media"><audio src={url} controls preload="metadata" /><a href={url} target="_blank" rel="noreferrer">{attachment.name}</a></div>;
   return <a className="message-list__file" href={url} target="_blank" rel="noreferrer" title={`Télécharger ${attachment.name}`}>
     <Icon name="draft" />
@@ -18,14 +18,21 @@ const renderAttachment = (attachment: Message["attachments"][number]) => {
     <Icon name="download" />
   </a>;
 };
-export const MessageList = memo(function MessageList({ messages }: { messages: Message[] }) {
+export const MessageList = memo(function MessageList({ messages, hasMoreBefore, loadingOlder, onLoadOlder }: {
+  messages: Message[];
+  hasMoreBefore: boolean;
+  loadingOlder: boolean;
+  onLoadOlder: () => void;
+}) {
   const listRef = useRef<HTMLDivElement>(null);
   const shouldFollowRef = useRef(true);
   const knownMessageIdsRef = useRef<Set<string>>(new Set());
   const initializedRef = useRef(false);
+  const prependScrollPositionRef = useRef<{ height: number; top: number } | undefined>(undefined);
+  const isPrependingRef = useRef(false);
   let enteringMessageId: string | undefined;
 
-  if (initializedRef.current && document.visibilityState === "visible") {
+  if (initializedRef.current && !isPrependingRef.current && document.visibilityState === "visible") {
     for (let index = messages.length - 1; index >= 0; index -= 1) {
       if (!knownMessageIdsRef.current.has(messages[index].id)) {
         enteringMessageId = messages[index].id;
@@ -36,10 +43,25 @@ export const MessageList = memo(function MessageList({ messages }: { messages: M
 
   useLayoutEffect(() => {
     const list = listRef.current;
-    if (list && shouldFollowRef.current) list.scrollTop = list.scrollHeight;
+    const previousPosition = prependScrollPositionRef.current;
+    if (list && previousPosition) {
+      list.scrollTop = previousPosition.top + list.scrollHeight - previousPosition.height;
+      prependScrollPositionRef.current = undefined;
+      isPrependingRef.current = false;
+    } else if (list && shouldFollowRef.current) list.scrollTop = list.scrollHeight;
     knownMessageIdsRef.current = new Set(messages.map((message) => message.id));
     initializedRef.current = true;
   }, [messages]);
+
+  const loadOlder = () => {
+    const list = listRef.current;
+    if (list) {
+      prependScrollPositionRef.current = { height: list.scrollHeight, top: list.scrollTop };
+      shouldFollowRef.current = false;
+      isPrependingRef.current = true;
+    }
+    onLoadOlder();
+  };
 
   return <div
     className="message-list"
@@ -50,6 +72,7 @@ export const MessageList = memo(function MessageList({ messages }: { messages: M
     }}
   >
     <div className="message-list__day"><span>Aujourd’hui</span></div>
+    {hasMoreBefore && <div className="message-list__history"><button type="button" onClick={loadOlder} disabled={loadingOlder}>{loadingOlder ? "Chargement…" : "Afficher les messages précédents"}</button></div>}
     {messages.map((message) => <article className={`message-list__message message-list__message--${message.authorKind}${message.id === enteringMessageId ? " message-list__message--entering" : ""}`} key={message.id}>
       <div className="message-list__avatar">{message.authorKind === "human" ? "VO" : message.authorName.slice(0, 2).toUpperCase()}</div>
       <div className="message-list__content">

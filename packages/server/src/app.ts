@@ -27,7 +27,19 @@ export const createApp = (store = new ConsiliumStore()) => {
     const topic = await store.getTopic(context.req.param("id"));
     return topic ? context.json(topic) : context.json({ error: "Topic not found" }, 404);
   });
-  app.get("/api/topics/:id/messages", async (context) => context.json(await store.listMessages(context.req.param("id"), context.req.query("since"))));
+  app.get("/api/topics/:id/messages", async (context) => {
+    const before = context.req.query("before");
+    const limit = context.req.query("limit");
+    if (before !== undefined || limit !== undefined) {
+      const query = z.object({
+        before: z.string().datetime().optional(),
+        limit: z.coerce.number().int().min(1).max(100).default(60),
+      }).safeParse({ before, limit });
+      if (!query.success) return context.json({ error: "Invalid message page query" }, 400);
+      return context.json(await store.listMessagePage(context.req.param("id"), query.data.before, query.data.limit));
+    }
+    return context.json(await store.listMessages(context.req.param("id"), context.req.query("since")));
+  });
   app.post("/api/topics/:id/messages", async (context) => {
     const input = z.object({
       authorId: z.string().min(1), authorName: z.string().min(1),

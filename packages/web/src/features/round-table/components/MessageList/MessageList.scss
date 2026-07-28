@@ -1,6 +1,7 @@
 .message-list {
   min-height: 0; padding: 12px clamp(20px, 5vw, 70px) 28px; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable;
   scrollbar-color: var(--cs-color-border) transparent; scrollbar-width: thin;
+  &__history { display: flex; justify-content: center; margin: 8px 0 18px; button { padding: 8px 12px; border: 1px solid var(--cs-color-border); border-radius: 9px; background: var(--cs-color-surface); color: var(--cs-color-text-muted); font: inherit; font-size: 11px; cursor: pointer; &:hover:not(:disabled) { border-color: #c69a85; color: var(--cs-color-accent-strong); } &:disabled { cursor: wait; opacity: .65; } } }
   &__day { display: flex; align-items: center; gap: 12px; margin: 10px 0 22px; color: var(--cs-color-text-muted); font-size: 10px; text-transform: uppercase; &::before, &::after { content: ""; height: 1px; flex: 1; background: var(--cs-color-border); } }
   &__message { display: flex; gap: 13px; max-width: 780px; margin: 0 auto 24px; }
   &__message--entering { transform-origin: left bottom; animation: message-list-arrive-left .42s cubic-bezier(.22, .9, .32, 1.15) both; }

@@ -130,10 +130,30 @@ export class ConsiliumStore {
     return this.snapshot.messages.filter((message) => message.topicId === topicId && (!since || message.createdAt > since));
   }
 
+  async listMessagePage(topicId: string, before?: string, limit = 60) {
+    await this.ensureLoaded();
+    const messages = this.snapshot.messages
+      .filter((message) => message.topicId === topicId && (!before || message.createdAt < before))
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    const firstMessageIndex = Math.max(0, messages.length - limit);
+
+    return {
+      messages: messages.slice(firstMessageIndex),
+      hasMoreBefore: firstMessageIndex > 0,
+    };
+  }
+
   async addMessage(input: Omit<Message, "id" | "createdAt" | "mentions">) {
     await this.ensureLoaded();
     const mentions = [...input.body.matchAll(/@([\p{L}\p{N}_-]+)/gu)].map((match) => match[1].toLowerCase());
-    const message: Message = { ...input, id: randomUUID(), mentions: [...new Set(mentions)], createdAt: now() };
+    const latestCreatedAt = this.snapshot.messages.at(-1)?.createdAt;
+    const currentTimestamp = now();
+    // Cursors use a timestamp comparison. Make message timestamps strictly increasing so two
+    // consecutive posts in the same millisecond cannot make a later message invisible to `since`.
+    const createdAt = latestCreatedAt && latestCreatedAt >= currentTimestamp
+      ? new Date(new Date(latestCreatedAt).getTime() + 1).toISOString()
+      : currentTimestamp;
+    const message: Message = { ...input, id: randomUUID(), mentions: [...new Set(mentions)], createdAt };
     const topic = this.snapshot.topics.find((candidate) => candidate.id === input.topicId);
     if (!topic) throw new Error("Topic not found");
     this.snapshot.messages.push(message);

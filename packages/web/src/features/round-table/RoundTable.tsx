@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { Agent, ConsiliumTask, Message, Topic } from "@consilium/core";
 import { api } from "../../core/api";
 import { Icon } from "../../shared/components/Icon/Icon";
@@ -10,13 +10,14 @@ import { NewTopicDialog } from "./components/NewTopicDialog/NewTopicDialog";
 import { TopicList } from "./components/TopicList/TopicList";
 import "./RoundTable.scss";
 
-const sameMessages = (current: Message[], next: Message[]) =>
-  current.length === next.length && current.every((message, index) => {
-    const candidate = next[index];
-    return candidate?.id === message.id
-      && candidate.body === message.body
-      && candidate.attachments.length === message.attachments.length;
-  });
+const MESSAGE_PAGE_SIZE = 60;
+
+const mergeMessages = (current: Message[], next: Message[]) => {
+  if (!next.length) return current;
+  const byId = new Map(current.map((message) => [message.id, message]));
+  next.forEach((message) => byId.set(message.id, message));
+  return [...byId.values()].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+};
 
 const sameAgents = (current: Agent[], next: Agent[]) =>
   current.length === next.length && current.every((agent, index) => {
@@ -43,21 +44,42 @@ export function RoundTable() {
   const [topics, setTopics] = useState<Topic[]>([]);
   const [agents, setAgents] = useState<Agent[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
+  const [hasMoreMessagesBefore, setHasMoreMessagesBefore] = useState(false);
+  const [loadingOlderMessages, setLoadingOlderMessages] = useState(false);
   const [tasks, setTasks] = useState<ConsiliumTask[]>([]);
   const [activeId, setActiveId] = useState<string>();
   const [error, setError] = useState("");
   const [mobilePanel, setMobilePanel] = useState<"topics" | "agents">();
   const [newTopicOpen, setNewTopicOpen] = useState(false);
+  const activeIdRef = useRef<string | undefined>(undefined);
+  const messagesRef = useRef<Message[]>([]);
   const activeTopic = topics.find((topic) => topic.id === activeId);
-  const loadMessages = useCallback(async (topicId: string) => {
+  useEffect(() => { activeIdRef.current = activeId; }, [activeId]);
+  useEffect(() => { messagesRef.current = messages; }, [messages]);
+
+  const loadInitialMessages = useCallback(async (topicId: string) => {
     try {
-      const next = await api.messages(topicId);
-      setMessages((current) => sameMessages(current, next) ? current : next);
+      const page = await api.messages(topicId, { limit: MESSAGE_PAGE_SIZE });
+      if (activeIdRef.current !== topicId) return;
+      setMessages(page.messages);
+      setHasMoreMessagesBefore(page.hasMoreBefore);
       setError("");
     } catch {
       setError("Impossible de joindre la table. Vérifiez que le serveur Consilium est démarré.");
     }
   }, []);
+  const refreshMessages = useCallback(async (topicId: string) => {
+    const latestMessage = messagesRef.current.at(-1);
+    if (!latestMessage) return loadInitialMessages(topicId);
+    try {
+      const next = await api.messagesSince(topicId, latestMessage.createdAt);
+      if (activeIdRef.current !== topicId) return;
+      setMessages((current) => mergeMessages(current, next));
+      setError("");
+    } catch {
+      setError("Impossible de joindre la table. VÃ©rifiez que le serveur Consilium est dÃ©marrÃ©.");
+    }
+  }, [loadInitialMessages]);
   const refreshAgents = useCallback(async () => {
     const next = await api.agents();
     setAgents((current) => sameAgents(current, next) ? current : next);
@@ -70,8 +92,8 @@ export function RoundTable() {
     const [nextTopics, nextAgents] = await Promise.all([api.topics(), api.agents()]);
     setTopics((current) => sameTopics(current, nextTopics) ? current : nextTopics);
     setAgents((current) => sameAgents(current, nextAgents) ? current : nextAgents);
-    if (activeId) await Promise.all([loadMessages(activeId), refreshTasks(activeId)]);
-  }, [activeId, loadMessages, refreshTasks]);
+    if (activeId) await Promise.all([loadInitialMessages(activeId), refreshTasks(activeId)]);
+  }, [activeId, loadInitialMessages, refreshTasks]);
 
   useEffect(() => {
     void Promise.all([api.topics(), api.agents()]).then(([nextTopics, nextAgents]) => {
@@ -80,11 +102,35 @@ export function RoundTable() {
   }, []);
   useEffect(() => {
     if (!activeId) return;
-    void loadMessages(activeId);
-    void refreshTasks(activeId);
-    const timer = window.setInterval(() => { void loadMessages(activeId); void refreshAgents(); void refreshTasks(activeId); }, 3000);
-    return () => window.clearInterval(timer);
-  }, [activeId, loadMessages, refreshAgents, refreshTasks]);
+    let cancelled = false;
+    let timer: number | undefined;
+    setMessages([]);
+    setHasMoreMessagesBefore(false);
+    void Promise.all([loadInitialMessages(activeId), refreshTasks(activeId)]).then(() => {
+      if (cancelled) return;
+      timer = window.setInterval(() => {
+        void refreshMessages(activeId);
+        void refreshAgents();
+        void refreshTasks(activeId);
+      }, 3000);
+    });
+    return () => { cancelled = true; if (timer) window.clearInterval(timer); };
+  }, [activeId, loadInitialMessages, refreshAgents, refreshMessages, refreshTasks]);
+
+  const loadOlderMessages = useCallback(async () => {
+    const topicId = activeIdRef.current;
+    const oldestMessage = messagesRef.current[0];
+    if (!topicId || !oldestMessage || loadingOlderMessages || !hasMoreMessagesBefore) return;
+    setLoadingOlderMessages(true);
+    try {
+      const page = await api.messages(topicId, { before: oldestMessage.createdAt, limit: MESSAGE_PAGE_SIZE });
+      if (activeIdRef.current !== topicId) return;
+      setMessages((current) => mergeMessages(current, page.messages));
+      setHasMoreMessagesBefore(page.hasMoreBefore);
+    } finally {
+      if (activeIdRef.current === topicId) setLoadingOlderMessages(false);
+    }
+  }, [hasMoreMessagesBefore, loadingOlderMessages]);
 
   const createTopic = async ({ title, description }: { title: string; description: string }) => {
     const topic = await api.createTopic(title, description);
@@ -94,18 +140,18 @@ export function RoundTable() {
     if (!activeId) return;
     const attachments = await Promise.all(files.map((file) => api.uploadAttachment(activeId, file)));
     const message = await api.sendMessage(activeId, body, attachments.map((attachment) => attachment.id));
-    setMessages((current) => [...current, message]); setTopics(await api.topics());
+    setMessages((current) => mergeMessages(current, [message])); setTopics(await api.topics());
   };
   const resetTopic = async () => {
     if (!activeId || !window.confirm(`Vider tous les messages de « ${activeTopic?.title} » ?`)) return;
     await api.resetTopic(activeId);
-    setMessages([]); setTasks([]); setTopics(await api.topics());
+    setMessages([]); setHasMoreMessagesBefore(false); setTasks([]); setTopics(await api.topics());
   };
   const deleteTopic = async () => {
     if (!activeId || !window.confirm(`Supprimer définitivement « ${activeTopic?.title} » et ses médias ?`)) return;
     await api.deleteTopic(activeId);
     const nextTopics = await api.topics();
-    setTopics(nextTopics); setActiveId(nextTopics[0]?.id); setMessages([]); setTasks([]);
+    setTopics(nextTopics); setActiveId(nextTopics[0]?.id); setMessages([]); setHasMoreMessagesBefore(false); setTasks([]);
   };
   const disconnectAgent = async (agentId: string) => {
     const agent = agents.find((candidate) => candidate.id === agentId);
@@ -144,7 +190,7 @@ export function RoundTable() {
         <div className="round-table__actions"><button aria-label="Rechercher"><Icon name="search" /></button><ConversationActions disabled={!activeId} onReset={() => void resetTopic()} onDelete={() => void deleteTopic()} /></div>
         <button className="round-table__mobile-participants" onClick={() => setMobilePanel("agents")} aria-label="Afficher les participants"><Icon name="group" /></button>
       </header>
-      {error ? <div className="round-table__error"><Icon name="cloud_off" />{error}</div> : <MessageList messages={messages} />}
+      {error ? <div className="round-table__error"><Icon name="cloud_off" />{error}</div> : <MessageList messages={messages} hasMoreBefore={hasMoreMessagesBefore} loadingOlder={loadingOlderMessages} onLoadOlder={loadOlderMessages} />}
       <MessageComposer agents={agents} disabled={!activeId || Boolean(error)} onSend={sendMessage} />
     </section>
     <AgentPanel

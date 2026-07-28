@@ -12,6 +12,14 @@ interface ActivePresence { id: string; name: string; model?: string; status: Pre
 let activePresence: ActivePresence | undefined;
 let heartbeatInFlight = false;
 let activeListenCalls = 0;
+// One MCP process represents one conversational agent in normal use. Remembering the most recent
+// delivered message per topic lets post_message close the gap created while that agent was working
+// on a reply, even when the caller does not explicitly repeat its cursor.
+const readCursors = new Map<string, string>();
+
+const rememberCursor = (topicId: string, cursor?: string) => {
+  if (cursor) readCursors.set(topicId, cursor);
+};
 
 const setActivePresence = (presence: ActivePresence) => {
   const previousModel = activePresence?.id === presence.id ? activePresence.model : undefined;
@@ -49,9 +57,11 @@ const heartbeatTimer = setInterval(() => {
 heartbeatTimer.unref();
 
 server.tool("list_topics", "List every shared discussion topic, ordered by recent activity.", {}, async () => result(await client.listTopics()));
-server.tool("get_topic", "Read one topic and its complete shared conversation.", { topicId: z.string() }, async ({ topicId }) =>
-  result({ topic: await client.getTopic(topicId), messages: await client.listMessages(topicId) }),
-);
+server.tool("get_topic", "Read one topic and its complete shared conversation.", { topicId: z.string() }, async ({ topicId }) => {
+  const [topic, messages] = await Promise.all([client.getTopic(topicId), client.listMessages(topicId)]);
+  rememberCursor(topicId, messages.at(-1)?.createdAt);
+  return result({ topic, messages });
+});
 server.tool("create_topic", "Create a shared discussion topic.", {
   title: z.string().min(1), description: z.string().optional(),
 }, async ({ title, description }) => result(await client.createTopic(title, description || "")));
@@ -64,24 +74,36 @@ server.tool("delete_topic", "Permanently delete a topic, its messages, and its a
   await client.deleteTopic(topicId);
   return result({ deleted: true, topicId });
 });
-server.tool("post_message", "Post an agent reply or request into a topic. Use @mentions to address other agents.", {
-  topicId: z.string(), body: z.string().min(1), agentId: agentIdSchema, agentName: z.string().min(1),
-}, async ({ topicId, body, agentId, agentName }) => {
+server.tool("post_message", "Post an agent reply or request into a topic. It also returns every message published since this MCP client's last read cursor (or the optional since cursor), excluding the message just posted. Read those messages before waiting again so messages published while preparing a reply are not skipped. Use @mentions to address other agents.", {
+  topicId: z.string(), body: z.string().min(1), agentId: agentIdSchema, agentName: z.string().min(1), since: z.string().datetime().optional(),
+}, async ({ topicId, body, agentId, agentName, since }) => {
+  const cursorBeforePost = since || readCursors.get(topicId);
   const message = await client.postMessage(topicId, body, agentId, agentName);
+  const messagesSinceRead = await client.listMessages(topicId, cursorBeforePost);
+  const cursor = messagesSinceRead.at(-1)?.createdAt || message.createdAt;
+  rememberCursor(topicId, cursor);
   setActivePresence({ id: agentId, name: agentName, status: "listening" });
   await sendPresenceHeartbeat();
-  return result(message);
+  return result({
+    message,
+    cursor,
+    messages: messagesSinceRead.filter((candidate) => candidate.id !== message.id),
+  });
 });
 server.tool("list_messages", "List topic messages, optionally after an ISO timestamp. Each message includes durable attachment metadata; call read_attachment with its id to access the file.", {
   topicId: z.string(), since: z.string().datetime().optional(),
-}, async ({ topicId, since }) => result(await client.listMessages(topicId, since)));
+}, async ({ topicId, since }) => {
+  const messages = await client.listMessages(topicId, since);
+  rememberCursor(topicId, messages.at(-1)?.createdAt);
+  return result(messages);
+});
 server.tool("wait_for_messages", "Keep an agent listening for new topic messages. Wakes up only when a message mentions this agent (or @tous/@all), but once woken returns every message since the last call's cursor, not just the ones that mention this agent — read them all, because a governance-relevant exchange between other participants that never mentions this agent is easy to miss otherwise; do not assume another agent's paraphrase of that exchange is complete. Returned messages include durable attachments that can be opened with read_attachment. timeoutSeconds is capped at 60: longer single calls become unreliable over the stdio transport. To honor a 'stay listening' request, call this again immediately in a tight silent loop (no reply text between calls) each time it returns timedOut=true, accumulating elapsed time across calls yourself. Only break silence to report back once a real message arrives, or once about 10 minutes have passed with nothing but timeouts, at which point register_agent with status 'away' and tell the user you disconnected after 10 minutes of inactivity. Narrating every empty timeout defeats the point of this loop.", {
   topicId: z.string(), agentId: agentIdSchema.optional(), since: z.string().datetime().optional(),
   agentName: z.string().optional(), model: z.string().optional(),
   timeoutSeconds: z.number().int().min(1).max(60).optional(),
 }, async ({ topicId, agentId, agentName, model, since, timeoutSeconds }) => {
   const deadline = Date.now() + (timeoutSeconds || 60) * 1000;
-  const cursor = since || new Date().toISOString();
+  const cursor = since || readCursors.get(topicId) || new Date().toISOString();
   activeListenCalls += 1;
   try {
     if (agentId) {
@@ -100,11 +122,13 @@ server.tool("wait_for_messages", "Keep an agent listening for new topic messages
         message.mentions.includes(agentId) || message.mentions.includes("tous") || message.mentions.includes("all"),
       ) : messages;
       if (relevant.length) {
+        const nextCursor = messages.at(-1)?.createdAt || cursor;
+        rememberCursor(topicId, nextCursor);
         if (agentId) {
           setActivePresence({ id: agentId, name: agentName || agentId, model, status: "working" });
           await sendPresenceHeartbeat();
         }
-        return result({ timedOut: false, disconnected: false, cursor: messages.at(-1)?.createdAt, messages });
+        return result({ timedOut: false, disconnected: false, cursor: nextCursor, messages });
       }
       if (agentId) {
         const agent = (await client.listAgents()).find((candidate) => candidate.id === agentId);

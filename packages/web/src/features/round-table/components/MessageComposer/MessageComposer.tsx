@@ -48,6 +48,7 @@ export function MessageComposer({ agents, disabled, onSend }: { agents: Agent[];
   const submit = async () => {
     if (isSending || (!body.trim() && !files.length)) return;
     const startedAt = Date.now();
+    let sent = false;
     setIsSending(true);
     try {
       await onSend(body.trim() || "Fichier partagé", files);
@@ -56,9 +57,11 @@ export function MessageComposer({ agents, disabled, onSend }: { agents: Agent[];
       setBody("");
       setFiles([]);
       setFileError("");
+      sent = true;
     } finally {
       setIsSending(false);
     }
+    if (sent) requestAnimationFrame(() => textareaRef.current?.focus());
   };
 
   return <div className="message-composer">

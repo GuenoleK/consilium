@@ -1,4 +1,9 @@
 import type { Agent, Attachment, ConsiliumTask, Message, Topic } from "@consilium/core";
+
+export interface MessagePage {
+  messages: Message[];
+  hasMoreBefore: boolean;
+}
 const baseUrl = import.meta.env.VITE_CONSILIUM_API_URL || "/api";
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${baseUrl}${path}`, { ...init, headers: { "content-type": "application/json", ...init?.headers } });
@@ -8,7 +13,12 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 export const api = {
   topics: () => request<Topic[]>("/topics"),
-  messages: (topicId: string) => request<Message[]>(`/topics/${topicId}/messages`),
+  messages: (topicId: string, options: { before?: string; limit?: number } = {}) => {
+    const query = new URLSearchParams({ limit: String(options.limit ?? 60) });
+    if (options.before) query.set("before", options.before);
+    return request<MessagePage>(`/topics/${topicId}/messages?${query}`);
+  },
+  messagesSince: (topicId: string, since: string) => request<Message[]>(`/topics/${topicId}/messages?since=${encodeURIComponent(since)}`),
   agents: () => request<Agent[]>("/agents"),
   createTopic: (title: string, description = "") => request<Topic>("/topics", { method: "POST", body: JSON.stringify({ title, description }) }),
   resetTopic: (topicId: string) => request<Topic>(`/topics/${topicId}/reset`, { method: "POST" }),
