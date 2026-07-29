@@ -1,0 +1,4 @@
+interface:
+  display_name: "Commit Changes"
+  short_description: "Create focused, consistent Git commits"
+  default_prompt: "Use $commit-changes to commit and push the requested work."
