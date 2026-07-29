@@ -55,6 +55,7 @@ export function RoundTable() {
   const [agents, setAgents] = useState<Agent[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [replyTo, setReplyTo] = useState<Message>();
+  const [replyFocusRequest, setReplyFocusRequest] = useState<{ topicId: string; id: number }>();
   const [hasMoreMessagesBefore, setHasMoreMessagesBefore] = useState(false);
   const [loadingOlderMessages, setLoadingOlderMessages] = useState(false);
   const [tasks, setTasks] = useState<ConsiliumTask[]>([]);
@@ -66,6 +67,7 @@ export function RoundTable() {
   const [initialTopicLoaded, setInitialTopicLoaded] = useState(false);
   const activeIdRef = useRef<string | undefined>(undefined);
   const messagesRef = useRef<Message[]>([]);
+  const replyFocusRequestIdRef = useRef(0);
   const activeTopic = topics.find((topic) => topic.id === activeId);
   const attentionEvents: AttentionEvent[] = [
     ...messages.filter((message) => message.authorKind === "agent" && message.mentions.includes("vous")).map((message) => ({
@@ -186,6 +188,11 @@ export function RoundTable() {
     const message = await api.sendMessage(activeId, body, attachments.map((attachment) => attachment.id), replyToId);
     setMessages((current) => mergeMessages(current, [message])); setTopics(await api.topics());
   }, [activeId]);
+  const replyToMessage = useCallback((message: Message) => {
+    if (!activeId) return;
+    setReplyTo(message);
+    setReplyFocusRequest({ topicId: activeId, id: ++replyFocusRequestIdRef.current });
+  }, [activeId]);
   const resetTopic = async () => {
     if (!activeId || !window.confirm(`Vider tous les messages de « ${activeTopic?.title} » ?`)) return;
     await api.resetTopic(activeId);
@@ -239,10 +246,10 @@ export function RoundTable() {
         <div className="round-table__actions"><button aria-label="Rechercher"><Icon name="search" /></button><NotificationToggle permission={notifications.permission} enabled={notifications.enabled} onToggle={() => void notifications.toggle()} /><ConversationActions disabled={!activeId} onReset={() => void resetTopic()} onDelete={() => void deleteTopic()} /></div>
         <button className="round-table__mobile-participants" onClick={() => setMobilePanel("agents")} aria-label="Afficher les participants"><Icon name="group" /></button>
       </header>
-      {error ? <div className="round-table__error"><Icon name="cloud_off" />{error}</div> : <MessageList messages={messages} hasMoreBefore={hasMoreMessagesBefore} loadingOlder={loadingOlderMessages} onLoadOlder={loadOlderMessages} onReply={setReplyTo} />}
+      {error ? <div className="round-table__error"><Icon name="cloud_off" />{error}</div> : <MessageList messages={messages} hasMoreBefore={hasMoreMessagesBefore} loadingOlder={loadingOlderMessages} onLoadOlder={loadOlderMessages} onReply={replyToMessage} />}
       <div className="round-table__composer-area">
         <AuthorizationBubble requests={authorizations} onResolve={resolveAuthorization} />
-        <MessageComposer key={activeId} topicId={activeId} agents={agents} disabled={!activeId || Boolean(error)} replyTo={replyTo} onCancelReply={() => setReplyTo(undefined)} onSend={sendMessage} />
+        <MessageComposer key={activeId} topicId={activeId} agents={agents} disabled={!activeId || Boolean(error)} replyTo={replyTo} replyFocusRequest={replyFocusRequest?.topicId === activeId ? replyFocusRequest?.id : undefined} onCancelReply={() => setReplyTo(undefined)} onSend={sendMessage} />
       </div>
     </section>
     <AgentPanel

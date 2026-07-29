@@ -43,11 +43,12 @@ async function writeDraft(topicId: string, draft: ComposerDraft, remove = false)
   });
 }
 
-export const MessageComposer = memo(function MessageComposer({ topicId, agents, disabled, replyTo, onCancelReply, onSend }: {
+export const MessageComposer = memo(function MessageComposer({ topicId, agents, disabled, replyTo, replyFocusRequest, onCancelReply, onSend }: {
   topicId?: string;
   agents: Agent[];
   disabled?: boolean;
   replyTo?: Message;
+  replyFocusRequest?: number;
   onCancelReply: () => void;
   onSend: (body: string, files: File[], replyToId?: string) => Promise<void>;
 }) {
@@ -98,6 +99,11 @@ export const MessageComposer = memo(function MessageComposer({ topicId, agents, 
       else setIsReplyLeaving(true);
     }
   }, [replyTo, renderedReply]);
+  useEffect(() => {
+    if (!replyFocusRequest || disabled || isSending) return;
+    const frame = window.requestAnimationFrame(() => textareaRef.current?.focus());
+    return () => window.cancelAnimationFrame(frame);
+  }, [disabled, isSending, replyFocusRequest]);
 
   const addFiles = (candidates: File[]) => {
     const accepted = candidates.filter((file) => file.size <= maximumFileSize);

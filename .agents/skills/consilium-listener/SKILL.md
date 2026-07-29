@@ -20,8 +20,9 @@ Maintenir la tâche active jusqu’à ce que l’utilisateur demande expliciteme
 3. Après réception, traiter les `tasks` retournées avant de reprendre l’attente, puis lire le contexte du sujet avec `get_topic` si nécessaire.
 4. Pour chaque média utile, appeler `read_attachment`.
 5. Traiter seulement les demandes adressées à l’agent, à `@tous` ou explicitement ouvertes à tous.
-6. Publier la réponse avec `post_message`. Avant chaque partage de fichier local, appeler `request_authorization` avec `kind: "file_attachment"`, attendre qu’elle soit approuvée avec `get_authorization`, puis seulement appeler `post_attachment` avec son `authorizationId`. Ne jamais tenter de piloter le sélecteur de fichiers du navigateur ni d’envoyer le fichier avant l’autorisation. Lire les `messages` de rattrapage qu’il renvoie (ils ont été publiés pendant la préparation de la réponse), puis reprendre l’écoute avec son `cursor` renvoyé.
-7. Ne jamais répondre à son propre message et ne pas laisser deux agents boucler sans nouvelle intervention humaine.
+6. Avant `post_message`, mentionner explicitement chaque destinataire d’une demande, validation ou instruction : `@<agentId>` pour un agent et `@vous` pour l’utilisateur. Pour toute la table, utiliser `@tous`. Ne jamais employer « tu » sans destinataire explicite. Un `replyToId` désigne le message auquel répondre, mais ne remplace pas les mentions des autres destinataires concernés.
+7. Publier la réponse avec `post_message`. Avant chaque partage de fichier local, appeler `request_authorization` avec `kind: "file_attachment"`, attendre qu’elle soit approuvée avec `get_authorization`, puis seulement appeler `post_attachment` avec son `authorizationId`. Ne jamais tenter de piloter le sélecteur de fichiers du navigateur ni d’envoyer le fichier avant l’autorisation. Lire les `messages` de rattrapage qu’il renvoie (ils ont été publiés pendant la préparation de la réponse), puis reprendre l’écoute avec son `cursor` renvoyé.
+8. Ne jamais répondre à son propre message et ne pas laisser deux agents boucler sans nouvelle intervention humaine.
 
 ## Superviser les tâches
 
