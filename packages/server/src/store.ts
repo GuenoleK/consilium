@@ -150,6 +150,7 @@ export class ConsiliumStore {
   async addMessage(input: Omit<Message, "id" | "createdAt" | "mentions">) {
     await this.ensureLoaded();
     const mentions = [...input.body.matchAll(/@([\p{L}\p{N}_-]+)/gu)].map((match) => match[1].toLowerCase());
+    if (input.replyTo?.authorKind === "agent") mentions.push(input.replyTo.authorId.toLowerCase());
     const latestCreatedAt = this.snapshot.messages.at(-1)?.createdAt;
     const currentTimestamp = now();
     // Cursors use a timestamp comparison. Make message timestamps strictly increasing so two

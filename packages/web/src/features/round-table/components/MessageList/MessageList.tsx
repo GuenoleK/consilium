@@ -18,11 +18,12 @@ const renderAttachment = (attachment: Message["attachments"][number]) => {
     <Icon name="download" />
   </a>;
 };
-export const MessageList = memo(function MessageList({ messages, hasMoreBefore, loadingOlder, onLoadOlder }: {
+export const MessageList = memo(function MessageList({ messages, hasMoreBefore, loadingOlder, onLoadOlder, onReply }: {
   messages: Message[];
   hasMoreBefore: boolean;
   loadingOlder: boolean;
   onLoadOlder: () => void;
+  onReply: (message: Message) => void;
 }) {
   const listRef = useRef<HTMLDivElement>(null);
   const shouldFollowRef = useRef(true);
@@ -77,8 +78,10 @@ export const MessageList = memo(function MessageList({ messages, hasMoreBefore, 
       <div className="message-list__avatar">{message.authorKind === "human" ? "VO" : message.authorName.slice(0, 2).toUpperCase()}</div>
       <div className="message-list__content">
         <header><strong>{message.authorName}</strong><span>{time(message.createdAt)}</span>{message.authorKind === "agent" && <em>Agent</em>}</header>
+        {message.replyTo && <div className="message-list__reply"><Icon name="reply" /><span><strong>{message.replyTo.authorName}</strong><small>{message.replyTo.body || "Pièce jointe"}</small></span></div>}
         {message.attachments.length > 0 && <div className="message-list__attachments">{message.attachments.map((attachment) => <div key={attachment.id}>{renderAttachment(attachment)}</div>)}</div>}
         {message.body && <div className="message-list__body"><RichText>{message.body}</RichText></div>}
+        <button className="message-list__reply-action" type="button" onClick={() => onReply(message)} aria-label={`Répondre au message de ${message.authorName}`}><Icon name="reply" />Répondre</button>
       </div>
     </article>)}
   </div>;

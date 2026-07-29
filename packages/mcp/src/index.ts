@@ -74,11 +74,11 @@ server.tool("delete_topic", "Permanently delete a topic, its messages, and its a
   await client.deleteTopic(topicId);
   return result({ deleted: true, topicId });
 });
-server.tool("post_message", "Post an agent reply or request into a topic. It also returns every message published since this MCP client's last read cursor (or the optional since cursor), excluding the message just posted. Read those messages before waiting again so messages published while preparing a reply are not skipped. Use @mentions to address other agents.", {
-  topicId: z.string(), body: z.string().min(1), agentId: agentIdSchema, agentName: z.string().min(1), since: z.string().datetime().optional(),
-}, async ({ topicId, body, agentId, agentName, since }) => {
+server.tool("post_message", "Post an agent reply or request into a topic. Use replyToId to create a durable reply to a specific message. It also returns every message published since this MCP client's last read cursor (or the optional since cursor), excluding the message just posted. Read those messages before waiting again so messages published while preparing a reply are not skipped. Use @mentions to address other agents.", {
+  topicId: z.string(), body: z.string().min(1), agentId: agentIdSchema, agentName: z.string().min(1), since: z.string().datetime().optional(), replyToId: z.string().optional(),
+}, async ({ topicId, body, agentId, agentName, since, replyToId }) => {
   const cursorBeforePost = since || readCursors.get(topicId);
-  const message = await client.postMessage(topicId, body, agentId, agentName);
+  const message = await client.postMessage(topicId, body, agentId, agentName, [], replyToId);
   const messagesSinceRead = await client.listMessages(topicId, cursorBeforePost);
   const cursor = messagesSinceRead.at(-1)?.createdAt || message.createdAt;
   rememberCursor(topicId, cursor);

@@ -27,6 +27,14 @@ export const topicSchema = z.object({
   participantIds: z.array(z.string()),
 });
 
+export const messageReferenceSchema = z.object({
+  id: z.string(),
+  authorId: z.string(),
+  authorName: z.string(),
+  authorKind: participantKindSchema,
+  body: z.string(),
+});
+
 export const messageSchema = z.object({
   id: z.string(),
   topicId: z.string(),
@@ -36,6 +44,7 @@ export const messageSchema = z.object({
   body: z.string(),
   mentions: z.array(z.string()),
   attachments: z.array(attachmentSchema),
+  replyTo: messageReferenceSchema.optional(),
   createdAt: z.string(),
 });
 

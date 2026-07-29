@@ -1,6 +1,11 @@
 .message-composer {
   position: relative; z-index: 2; flex: 0 0 auto; min-width: 0; padding: 10px clamp(20px, 5vw, 70px) 18px; border-top: 1px solid rgba(222, 213, 200, .7); background: rgba(248, 244, 236, .96); box-shadow: 0 -12px 28px rgba(76, 57, 39, .04);
   &__box { position: relative; min-width: 0; max-width: 780px; margin: auto; border: 1px solid var(--cs-color-border); border-radius: var(--cs-radius-md); background: var(--cs-color-surface); box-shadow: var(--cs-shadow-card); &:focus-within { border-color: #c69a85; box-shadow: 0 0 0 3px rgba(183,93,63,.08); } &--dragging { border-color: var(--cs-color-accent); box-shadow: 0 0 0 3px rgba(183,93,63,.12); } }
+  &__reply { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; align-items: center; column-gap: 8px; min-width: 0; max-height: 64px; overflow: hidden; padding: 10px 12px 8px; border-bottom: 1px solid var(--cs-color-border); border-start-start-radius: calc(var(--cs-radius-md) - 1px); border-start-end-radius: calc(var(--cs-radius-md) - 1px); background: var(--cs-color-surface-soft); color: var(--cs-color-accent-strong); animation: message-composer-reply-arrive 180ms cubic-bezier(.22, .9, .32, 1.08) both; }
+  &__reply--leaving { pointer-events: none; animation: message-composer-reply-leave 150ms ease-in both; }
+  &__reply-icon { display: grid; place-items: center; width: 18px; height: 18px; .icon { font-size: 17px; } }
+  &__reply-copy { display: grid; min-width: 0; gap: 2px; strong, small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } strong { font-size: 11px; } small { color: var(--cs-color-text-muted); font-size: 10px; } }
+  &__reply button { position: relative; display: block; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 7px; background: transparent; color: var(--cs-color-text-muted); .icon { position: absolute; inset: 0; display: grid; place-items: center; font-size: 20px; line-height: 1; } &:hover { background: rgba(76, 57, 39, .08); color: var(--cs-color-text); } }
   textarea { display: block; width: 100%; min-height: 70px; padding: 14px 16px 4px; resize: none; border: 0; outline: 0; background: transparent; color: inherit; font-size: 13px; &::placeholder { color: #a49b91; } }
   &__file-input { display: none; }
   &__drop-hint { position: absolute; inset: 6px; z-index: 3; display: flex; align-items: center; justify-content: center; gap: 8px; border: 1px dashed var(--cs-color-accent); border-radius: 12px; background: rgba(255, 253, 248, .94); color: var(--cs-color-accent-strong); font-size: 12px; font-weight: 700; pointer-events: none; }
@@ -18,6 +23,7 @@
   .message-composer {
     padding: 8px 10px calc(8px + env(safe-area-inset-bottom));
     &__box { border-radius: 13px; }
+    &__reply { border-start-start-radius: 12px; border-start-end-radius: 12px; }
     textarea { min-height: 58px; padding: 11px 12px 2px; font-size: 16px; }
     &__tools { padding: 5px 6px; }
     &__tools > span { display: none; }
@@ -32,6 +38,16 @@
   100% { opacity: 0; transform: translateY(-7px); }
 }
 
+@keyframes message-composer-reply-arrive {
+  from { max-height: 0; padding-top: 0; padding-bottom: 0; border-bottom-color: transparent; opacity: 0; transform: translateY(-5px); }
+  to { max-height: 64px; padding-top: 10px; padding-bottom: 8px; border-bottom-color: var(--cs-color-border); opacity: 1; transform: translateY(0); }
+}
+
+@keyframes message-composer-reply-leave {
+  from { max-height: 64px; padding-top: 10px; padding-bottom: 8px; border-bottom-color: var(--cs-color-border); opacity: 1; transform: translateY(0); }
+  to { max-height: 0; padding-top: 0; padding-bottom: 0; border-bottom-color: transparent; opacity: 0; transform: translateY(-4px); }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .message-composer__send--sending .icon { animation: none; }
+  .message-composer__send--sending .icon, .message-composer__reply { animation: none; }
 }

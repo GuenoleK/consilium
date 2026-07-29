@@ -30,10 +30,10 @@ export class ConsiliumClient {
     const query = since ? `?since=${encodeURIComponent(since)}` : "";
     return this.request<Message[]>(`/api/topics/${topicId}/messages${query}`);
   }
-  postMessage(topicId: string, body: string, agentId: string, agentName: string, attachmentIds: string[] = []) {
+  postMessage(topicId: string, body: string, agentId: string, agentName: string, attachmentIds: string[] = [], replyToId?: string) {
     return this.request<Message>(`/api/topics/${topicId}/messages`, {
       method: "POST",
-      body: JSON.stringify({ body, authorId: agentId, authorName: agentName, authorKind: "agent", attachmentIds }),
+      body: JSON.stringify({ body, authorId: agentId, authorName: agentName, authorKind: "agent", attachmentIds, replyToId }),
     });
   }
   async uploadAttachment(topicId: string, filePath: string, mediaType?: string) {

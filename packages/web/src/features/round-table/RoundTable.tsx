@@ -14,6 +14,7 @@ import { TopicList } from "./components/TopicList/TopicList";
 import "./RoundTable.scss";
 
 const MESSAGE_PAGE_SIZE = 60;
+const POLL_INTERVAL = 3000;
 
 const mergeMessages = (current: Message[], next: Message[]) => {
   if (!next.length) return current;
@@ -53,6 +54,7 @@ export function RoundTable() {
   const [topics, setTopics] = useState<Topic[]>([]);
   const [agents, setAgents] = useState<Agent[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
+  const [replyTo, setReplyTo] = useState<Message>();
   const [hasMoreMessagesBefore, setHasMoreMessagesBefore] = useState(false);
   const [loadingOlderMessages, setLoadingOlderMessages] = useState(false);
   const [tasks, setTasks] = useState<ConsiliumTask[]>([]);
@@ -142,18 +144,20 @@ export function RoundTable() {
     let timer: number | undefined;
     setInitialTopicLoaded(false);
     setMessages([]);
+    setReplyTo(undefined);
     setHasMoreMessagesBefore(false);
     setAuthorizations([]);
-    void Promise.all([loadInitialMessages(activeId), refreshTasks(activeId), refreshAuthorizations(activeId)]).then(() => {
-      if (cancelled) return;
-      setInitialTopicLoaded(true);
-      timer = window.setInterval(() => {
-        void refreshMessages(activeId);
-        void refreshAgents();
-        void refreshTasks(activeId);
-        void refreshAuthorizations(activeId);
-      }, 3000);
-    });
+    void Promise.allSettled([loadInitialMessages(activeId), refreshTasks(activeId), refreshAuthorizations(activeId)])
+      .then(() => {
+        if (cancelled) return;
+        setInitialTopicLoaded(true);
+        timer = window.setInterval(() => {
+          void refreshMessages(activeId);
+          void refreshAgents();
+          void refreshTasks(activeId);
+          void refreshAuthorizations(activeId);
+        }, POLL_INTERVAL);
+      });
     return () => { cancelled = true; if (timer) window.clearInterval(timer); };
   }, [activeId, loadInitialMessages, refreshAgents, refreshAuthorizations, refreshMessages, refreshTasks]);
 
@@ -176,22 +180,22 @@ export function RoundTable() {
     const topic = await api.createTopic(title, description);
     setTopics((current) => [topic, ...current]); setActiveId(topic.id);
   };
-  const sendMessage = async (body: string, files: File[]) => {
+  const sendMessage = useCallback(async (body: string, files: File[], replyToId?: string) => {
     if (!activeId) return;
     const attachments = await Promise.all(files.map((file) => api.uploadAttachment(activeId, file)));
-    const message = await api.sendMessage(activeId, body, attachments.map((attachment) => attachment.id));
+    const message = await api.sendMessage(activeId, body, attachments.map((attachment) => attachment.id), replyToId);
     setMessages((current) => mergeMessages(current, [message])); setTopics(await api.topics());
-  };
+  }, [activeId]);
   const resetTopic = async () => {
     if (!activeId || !window.confirm(`Vider tous les messages de « ${activeTopic?.title} » ?`)) return;
     await api.resetTopic(activeId);
-    setMessages([]); setHasMoreMessagesBefore(false); setTasks([]); setTopics(await api.topics());
+    setMessages([]); setReplyTo(undefined); setHasMoreMessagesBefore(false); setTasks([]); setTopics(await api.topics());
   };
   const deleteTopic = async () => {
     if (!activeId || !window.confirm(`Supprimer définitivement « ${activeTopic?.title} » et ses médias ?`)) return;
     await api.deleteTopic(activeId);
     const nextTopics = await api.topics();
-    setTopics(nextTopics); setActiveId(nextTopics[0]?.id); setMessages([]); setHasMoreMessagesBefore(false); setTasks([]);
+    setTopics(nextTopics); setActiveId(nextTopics[0]?.id); setMessages([]); setReplyTo(undefined); setHasMoreMessagesBefore(false); setTasks([]);
   };
   const disconnectAgent = async (agentId: string) => {
     const agent = agents.find((candidate) => candidate.id === agentId);
@@ -235,10 +239,10 @@ export function RoundTable() {
         <div className="round-table__actions"><button aria-label="Rechercher"><Icon name="search" /></button><NotificationToggle permission={notifications.permission} enabled={notifications.enabled} onToggle={() => void notifications.toggle()} /><ConversationActions disabled={!activeId} onReset={() => void resetTopic()} onDelete={() => void deleteTopic()} /></div>
         <button className="round-table__mobile-participants" onClick={() => setMobilePanel("agents")} aria-label="Afficher les participants"><Icon name="group" /></button>
       </header>
-      {error ? <div className="round-table__error"><Icon name="cloud_off" />{error}</div> : <MessageList messages={messages} hasMoreBefore={hasMoreMessagesBefore} loadingOlder={loadingOlderMessages} onLoadOlder={loadOlderMessages} />}
+      {error ? <div className="round-table__error"><Icon name="cloud_off" />{error}</div> : <MessageList messages={messages} hasMoreBefore={hasMoreMessagesBefore} loadingOlder={loadingOlderMessages} onLoadOlder={loadOlderMessages} onReply={setReplyTo} />}
       <div className="round-table__composer-area">
         <AuthorizationBubble requests={authorizations} onResolve={resolveAuthorization} />
-        <MessageComposer agents={agents} disabled={!activeId || Boolean(error)} onSend={sendMessage} />
+        <MessageComposer key={activeId} topicId={activeId} agents={agents} disabled={!activeId || Boolean(error)} replyTo={replyTo} onCancelReply={() => setReplyTo(undefined)} onSend={sendMessage} />
       </div>
     </section>
     <AgentPanel

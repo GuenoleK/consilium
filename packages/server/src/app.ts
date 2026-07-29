@@ -45,9 +45,19 @@ export const createApp = (store = new ConsiliumStore()) => {
       authorId: z.string().min(1), authorName: z.string().min(1),
       authorKind: z.enum(["human", "agent", "system"]), body: z.string().min(1),
       attachmentIds: z.array(z.string()).default([]),
+      replyToId: z.string().optional(),
     }).parse(await context.req.json());
-    const { attachmentIds, ...messageInput } = input;
-    const message = await store.addMessage({ ...messageInput, attachments: [], topicId: context.req.param("id") });
+    const { attachmentIds, replyToId, ...messageInput } = input;
+    const replyToMessage = replyToId ? (await store.listMessages(context.req.param("id"))).find((message) => message.id === replyToId) : undefined;
+    if (replyToId && !replyToMessage) return context.json({ error: "Reply target not found in this topic" }, 404);
+    const replyTo = replyToMessage && {
+      id: replyToMessage.id,
+      authorId: replyToMessage.authorId,
+      authorName: replyToMessage.authorName,
+      authorKind: replyToMessage.authorKind,
+      body: replyToMessage.body,
+    };
+    const message = await store.addMessage({ ...messageInput, attachments: [], replyTo, topicId: context.req.param("id") });
     return context.json(attachmentIds.length ? await store.attachToMessage(message.id, attachmentIds) : message, 201);
   });
   app.post("/api/topics/:id/attachments", async (context) => {

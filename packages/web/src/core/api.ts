@@ -23,8 +23,8 @@ export const api = {
   createTopic: (title: string, description = "") => request<Topic>("/topics", { method: "POST", body: JSON.stringify({ title, description }) }),
   resetTopic: (topicId: string) => request<Topic>(`/topics/${topicId}/reset`, { method: "POST" }),
   deleteTopic: (topicId: string) => request<void>(`/topics/${topicId}`, { method: "DELETE" }),
-  sendMessage: (topicId: string, body: string, attachmentIds: string[] = []) => request<Message>(`/topics/${topicId}/messages`, {
-    method: "POST", body: JSON.stringify({ authorId: "human", authorName: "Vous", authorKind: "human", body, attachmentIds }),
+  sendMessage: (topicId: string, body: string, attachmentIds: string[] = [], replyToId?: string) => request<Message>(`/topics/${topicId}/messages`, {
+    method: "POST", body: JSON.stringify({ authorId: "human", authorName: "Vous", authorKind: "human", body, attachmentIds, replyToId }),
   }),
   uploadAttachment: async (topicId: string, file: File) => {
     const form = new FormData();
