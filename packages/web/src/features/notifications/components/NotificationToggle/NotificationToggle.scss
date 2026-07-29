@@ -1,0 +1,6 @@
+.notification-toggle {
+  position: relative;
+
+  &--enabled { color: var(--cs-color-accent-strong) !important; }
+  &--enabled::after { position: absolute; top: 7px; right: 7px; width: 6px; height: 6px; border: 1px solid var(--cs-color-surface); border-radius: 50%; background: var(--cs-color-green); content: ""; }
+}
