@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { Agent, AuthorizationRequest, ConsiliumTask, Message, Topic } from "@consilium/core";
 import { api } from "../../core/api";
 import { Icon } from "../../shared/components/Icon/Icon";
+import { NotificationToggle } from "../notifications/components/NotificationToggle/NotificationToggle";
+import { useSystemNotifications, type AttentionEvent } from "../notifications/useSystemNotifications";
 import { AgentPanel } from "./components/AgentPanel/AgentPanel";
 import { AuthorizationBubble } from "./components/AuthorizationBubble/AuthorizationBubble";
 import { ConversationActions } from "./components/ConversationActions/ConversationActions";
@@ -59,9 +61,31 @@ export function RoundTable() {
   const [error, setError] = useState("");
   const [mobilePanel, setMobilePanel] = useState<"topics" | "agents">();
   const [newTopicOpen, setNewTopicOpen] = useState(false);
+  const [initialTopicLoaded, setInitialTopicLoaded] = useState(false);
   const activeIdRef = useRef<string | undefined>(undefined);
   const messagesRef = useRef<Message[]>([]);
   const activeTopic = topics.find((topic) => topic.id === activeId);
+  const attentionEvents: AttentionEvent[] = [
+    ...messages.filter((message) => message.authorKind === "agent" && message.mentions.includes("vous")).map((message) => ({
+      id: `mention:${message.id}`,
+      kind: "mention" as const,
+      title: `${message.authorName} vous mentionne`,
+      body: message.body.replace(/\s+/g, " ").trim().slice(0, 180) || "Un agent attend votre retour.",
+    })),
+    ...authorizations.filter((authorization) => authorization.status === "pending").map((authorization) => ({
+      id: `authorization:${authorization.id}`,
+      kind: "authorization" as const,
+      title: "Autorisation demandée",
+      body: `${authorization.requestedByName} souhaite ${authorization.action}.`,
+    })),
+    ...tasks.flatMap((task) => task.approvals.filter((approval) => approval.status === "pending").map((approval) => ({
+      id: `approval:${approval.id}`,
+      kind: "approval" as const,
+      title: "Validation demandée",
+      body: `${task.title} : ${approval.action}.`,
+    }))),
+  ];
+  const notifications = useSystemNotifications(attentionEvents, Boolean(activeId && initialTopicLoaded));
   useEffect(() => { activeIdRef.current = activeId; }, [activeId]);
   useEffect(() => { messagesRef.current = messages; }, [messages]);
 
@@ -116,11 +140,13 @@ export function RoundTable() {
     if (!activeId) return;
     let cancelled = false;
     let timer: number | undefined;
+    setInitialTopicLoaded(false);
     setMessages([]);
     setHasMoreMessagesBefore(false);
     setAuthorizations([]);
     void Promise.all([loadInitialMessages(activeId), refreshTasks(activeId), refreshAuthorizations(activeId)]).then(() => {
       if (cancelled) return;
+      setInitialTopicLoaded(true);
       timer = window.setInterval(() => {
         void refreshMessages(activeId);
         void refreshAgents();
@@ -206,7 +232,7 @@ export function RoundTable() {
     <section className="round-table__conversation">
       <header className="round-table__header">
         <div className="round-table__topic"><button className="round-table__mobile-nav" onClick={() => setMobilePanel("topics")} aria-label="Afficher les sujets"><Icon name="menu" /></button><span className="round-table__topic-icon"><Icon name="forum" filled /></span><div className="round-table__topic-copy"><h1>{activeTopic?.title || "La table se prépare…"}</h1><p>{activeTopic?.description || "Contexte partagé entre humains et agents"}</p></div></div>
-        <div className="round-table__actions"><button aria-label="Rechercher"><Icon name="search" /></button><ConversationActions disabled={!activeId} onReset={() => void resetTopic()} onDelete={() => void deleteTopic()} /></div>
+        <div className="round-table__actions"><button aria-label="Rechercher"><Icon name="search" /></button><NotificationToggle permission={notifications.permission} enabled={notifications.enabled} onToggle={() => void notifications.toggle()} /><ConversationActions disabled={!activeId} onReset={() => void resetTopic()} onDelete={() => void deleteTopic()} /></div>
         <button className="round-table__mobile-participants" onClick={() => setMobilePanel("agents")} aria-label="Afficher les participants"><Icon name="group" /></button>
       </header>
       {error ? <div className="round-table__error"><Icon name="cloud_off" />{error}</div> : <MessageList messages={messages} hasMoreBefore={hasMoreMessagesBefore} loadingOlder={loadingOlderMessages} onLoadOlder={loadOlderMessages} />}
