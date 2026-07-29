@@ -4,7 +4,8 @@
   &__mobile-close { display: none; }
   &__crest { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: var(--cs-color-accent); color: #fffaf3; font: 700 19px var(--cs-font-heading); box-shadow: inset 0 0 0 4px rgba(255,255,255,.18); }
   &__create { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 11px 14px; border: 0; border-radius: var(--cs-radius-sm); background: var(--cs-color-accent); color: white; font-weight: 700; &:hover { background: var(--cs-color-accent-strong); } }
-  &__heading { display: flex; justify-content: space-between; margin: 26px 8px 10px; color: var(--cs-color-text-muted); font-size: 11px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; }
+  &__heading { display: flex; align-items: center; gap: 7px; margin: 26px 8px 10px; color: var(--cs-color-text-muted); font-size: 11px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; }
+  &__count { display: grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; background: var(--cs-color-accent-soft); color: var(--cs-color-accent-strong); font-size: 10px; letter-spacing: 0; }
   &__items { display: grid; min-width: 0; width: 100%; gap: 6px; overflow-x: hidden; overflow-y: auto; }
   &__item { display: flex; min-width: 0; max-width: 100%; gap: 11px; padding: 12px; border: 0; border-radius: 12px; background: transparent; color: inherit; text-align: left; &--active { background: var(--cs-color-accent-soft); color: var(--cs-color-accent-strong); } &:hover:not(&--active) { background: var(--cs-color-surface-soft); } }
   &__item-icon { padding-top: 2px; }

@@ -9,7 +9,7 @@ export function TopicList({ topics, activeId, onSelect, onCreate, onSync, onMobi
   return <aside className="topic-list">
     <div className="topic-list__brand"><span className="topic-list__crest">C</span><div><strong>Consilium</strong><small>La table ronde</small></div><button className="topic-list__mobile-close" onClick={onMobileClose} aria-label="Fermer les sujets"><Icon name="close" /></button></div>
     <button className="topic-list__create" onClick={onCreate}><Icon name="add" />Nouveau sujet</button>
-    <div className="topic-list__heading"><span>Sujets</span><span>{topics.length}</span></div>
+    <div className="topic-list__heading"><span>Sujets</span><span className="topic-list__count">{topics.length}</span></div>
     <nav className="topic-list__items" aria-label="Sujets de discussion">
       {topics.map((topic) => <button key={topic.id} className={`topic-list__item${topic.id === activeId ? " topic-list__item--active" : ""}`} onClick={() => onSelect(topic.id)}>
         <span className="topic-list__item-icon"><Icon name="forum" filled={topic.id === activeId} /></span>
