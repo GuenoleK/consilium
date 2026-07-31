@@ -1,15 +1,16 @@
 import { memo, useLayoutEffect, useRef } from "react";
-import type { Message } from "@consilium/core";
+import type { Agent, Message } from "@consilium/core";
 import { api } from "../../../../core/api";
 import { Icon } from "../../../../shared/components/Icon/Icon";
 import { RichText } from "../../../../shared/components/RichText/RichText";
+import { AgentTypingIndicator } from "../AgentTypingIndicator/AgentTypingIndicator";
+import { MediaGallery } from "./MediaGallery";
 import "./MessageList.scss";
 const time = (value: string) => new Intl.DateTimeFormat("fr", { hour: "2-digit", minute: "2-digit" }).format(new Date(value));
 const fileExtension = (name: string) => name.includes(".") ? name.split(".").pop()?.toUpperCase() : "FICHIER";
 const renderAttachment = (attachment: Message["attachments"][number]) => {
+  if (attachment.mediaType.startsWith("image/") || attachment.mediaType.startsWith("video/")) return null;
   const url = api.attachmentUrl(attachment.id);
-  if (attachment.mediaType.startsWith("image/")) return <a className="message-list__media message-list__media--image" href={url} target="_blank" rel="noreferrer"><img src={url} alt={attachment.name} loading="lazy" decoding="async" /><span>{attachment.name}</span></a>;
-  if (attachment.mediaType.startsWith("video/")) return <div className="message-list__media"><video src={url} controls preload="none" /><a href={url} target="_blank" rel="noreferrer">{attachment.name}</a></div>;
   if (attachment.mediaType.startsWith("audio/")) return <div className="message-list__media"><audio src={url} controls preload="metadata" /><a href={url} target="_blank" rel="noreferrer">{attachment.name}</a></div>;
   return <a className="message-list__file" href={api.attachmentUrl(attachment.id, true)} download title={`Télécharger ${attachment.name}`}>
     <Icon name="draft" />
@@ -18,8 +19,9 @@ const renderAttachment = (attachment: Message["attachments"][number]) => {
     <Icon name="download" />
   </a>;
 };
-export const MessageList = memo(function MessageList({ messages, hasMoreBefore, loadingOlder, onLoadOlder, onReply }: {
+export const MessageList = memo(function MessageList({ messages, typingAgents, hasMoreBefore, loadingOlder, onLoadOlder, onReply }: {
   messages: Message[];
+  typingAgents: Agent[];
   hasMoreBefore: boolean;
   loadingOlder: boolean;
   onLoadOlder: () => void;
@@ -54,6 +56,11 @@ export const MessageList = memo(function MessageList({ messages, hasMoreBefore, 
     initializedRef.current = true;
   }, [messages]);
 
+  useLayoutEffect(() => {
+    const list = listRef.current;
+    if (list && shouldFollowRef.current && !prependScrollPositionRef.current) list.scrollTop = list.scrollHeight;
+  }, [typingAgents]);
+
   const loadOlder = () => {
     const list = listRef.current;
     if (list) {
@@ -79,10 +86,14 @@ export const MessageList = memo(function MessageList({ messages, hasMoreBefore, 
       <div className="message-list__content">
         <header><strong>{message.authorName}</strong><span>{time(message.createdAt)}</span>{message.authorKind === "agent" && <em>Agent</em>}</header>
         {message.replyTo && <div className="message-list__reply"><Icon name="reply" /><span><strong>{message.replyTo.authorName}</strong><small>{message.replyTo.body || "Pièce jointe"}</small></span></div>}
-        {message.attachments.length > 0 && <div className="message-list__attachments">{message.attachments.map((attachment) => <div key={attachment.id}>{renderAttachment(attachment)}</div>)}</div>}
+        {message.attachments.length > 0 && <><MediaGallery attachments={message.attachments} /><div className="message-list__attachments">{message.attachments.filter((attachment) => !attachment.mediaType.startsWith("image/") && !attachment.mediaType.startsWith("video/")).map((attachment) => <div key={attachment.id}>{renderAttachment(attachment)}</div>)}</div></>}
         {message.body && <div className="message-list__body"><RichText>{message.body}</RichText></div>}
         <button className="message-list__reply-action" type="button" onClick={() => onReply(message)} aria-label={`Répondre au message de ${message.authorName}`}><Icon name="reply" />Répondre</button>
       </div>
     </article>)}
+    <AgentTypingIndicator agents={typingAgents} onHeightSettled={() => {
+      const list = listRef.current;
+      if (list && shouldFollowRef.current) list.scrollTop = list.scrollHeight;
+    }} />
   </div>;
 });

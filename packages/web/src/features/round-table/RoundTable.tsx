@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Agent, AuthorizationRequest, ConsiliumTask, Message, Topic } from "@consilium/core";
 import { api } from "../../core/api";
 import { Icon } from "../../shared/components/Icon/Icon";
@@ -69,6 +69,7 @@ export function RoundTable() {
   const messagesRef = useRef<Message[]>([]);
   const replyFocusRequestIdRef = useRef(0);
   const activeTopic = topics.find((topic) => topic.id === activeId);
+  const typingAgents = useMemo(() => agents.filter((agent) => agent.status === "working"), [agents]);
   const attentionEvents: AttentionEvent[] = [
     ...messages.filter((message) => message.authorKind === "agent" && message.mentions.includes("vous")).map((message) => ({
       id: `mention:${message.id}`,
@@ -246,7 +247,7 @@ export function RoundTable() {
         <div className="round-table__actions"><button aria-label="Rechercher"><Icon name="search" /></button><NotificationToggle permission={notifications.permission} enabled={notifications.enabled} onToggle={() => void notifications.toggle()} /><ConversationActions disabled={!activeId} onReset={() => void resetTopic()} onDelete={() => void deleteTopic()} /></div>
         <button className="round-table__mobile-participants" onClick={() => setMobilePanel("agents")} aria-label="Afficher les participants"><Icon name="group" /></button>
       </header>
-      {error ? <div className="round-table__error"><Icon name="cloud_off" />{error}</div> : <MessageList messages={messages} hasMoreBefore={hasMoreMessagesBefore} loadingOlder={loadingOlderMessages} onLoadOlder={loadOlderMessages} onReply={replyToMessage} />}
+      {error ? <div className="round-table__error"><Icon name="cloud_off" />{error}</div> : <MessageList messages={messages} typingAgents={typingAgents} hasMoreBefore={hasMoreMessagesBefore} loadingOlder={loadingOlderMessages} onLoadOlder={loadOlderMessages} onReply={replyToMessage} />}
       <div className="round-table__composer-area">
         <AuthorizationBubble requests={authorizations} onResolve={resolveAuthorization} />
         <MessageComposer key={activeId} topicId={activeId} agents={agents} disabled={!activeId || Boolean(error)} replyTo={replyTo} replyFocusRequest={replyFocusRequest?.topicId === activeId ? replyFocusRequest?.id : undefined} onCancelReply={() => setReplyTo(undefined)} onSend={sendMessage} />

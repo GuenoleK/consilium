@@ -19,7 +19,7 @@
   &__body { padding: 13px 16px; border: 1px solid var(--cs-color-border); border-radius: 4px 16px 16px; background: var(--cs-color-surface); box-shadow: 0 4px 14px rgba(76,57,39,.04); }
   &__reply-action { display: inline-flex; align-items: center; gap: 4px; margin: 5px 0 0; padding: 4px 6px; border: 0; border-radius: 6px; background: transparent; color: var(--cs-color-text-muted); font: inherit; font-size: 10px; cursor: pointer; opacity: 0; transition: background .15s, color .15s, opacity .15s; .icon { font-size: 14px; } &:hover, &:focus-visible { background: var(--cs-color-surface-soft); color: var(--cs-color-accent-strong); opacity: 1; } }
   &__message:hover &__reply-action, &__message:focus-within &__reply-action { opacity: 1; }
-  &__attachments { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+  &__attachments { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; &:empty { display: none; } }
   &__attachments > div { min-width: 0; }
   &__media { display: grid; gap: 5px; color: var(--cs-color-text-muted); font-size: 10px; text-decoration: none; img, video { display: block; width: 100%; max-height: 280px; border: 1px solid var(--cs-color-border); border-radius: 12px; object-fit: cover; } audio { width: 100%; } &--image:hover span { color: var(--cs-color-accent-strong); } }
   &__file {

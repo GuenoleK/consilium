@@ -1,0 +1,27 @@
+.media-gallery {
+  display: flex; max-width: 100%; gap: 9px; margin: 0 0 8px; padding: 1px 1px 7px; overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain; scroll-snap-type: x proximity; scrollbar-color: var(--cs-color-border) transparent; scrollbar-width: thin;
+  &__item { display: grid; flex: 0 0 132px; min-width: 0; gap: 5px; scroll-snap-align: start; }
+  &__preview { position: relative; display: block; width: 132px; height: 132px; padding: 0; overflow: hidden; border: 1px solid var(--cs-color-border); border-radius: 13px; background: var(--cs-color-surface-soft); cursor: pointer; img, video { display: block; width: 100%; height: 100%; object-fit: cover; } &:focus-visible { outline: 2px solid var(--cs-color-accent); outline-offset: 2px; } }
+  &__play { position: absolute; inset: 0; z-index: 1; display: grid; place-items: center; color: white; text-shadow: 0 2px 7px rgba(0, 0, 0, .5); .icon { width: 38px; height: 38px; padding: 7px; border: 1px solid rgba(255, 255, 255, .65); border-radius: 50%; background: rgba(45, 41, 37, .5); font-size: 24px; } }
+  &__name { overflow: hidden; color: var(--cs-color-text-muted); font-size: 10px; line-height: 1.25; text-overflow: ellipsis; white-space: nowrap; }
+}
+
+.media-viewer {
+  position: fixed; z-index: 40; inset: 0; display: grid; place-items: center; padding: 24px 88px; background: rgba(27, 25, 23, .82); backdrop-filter: blur(7px); animation: media-viewer-fade .16s ease-out;
+  &__panel { position: relative; display: grid; grid-template-rows: auto minmax(0, 1fr); width: fit-content; max-width: calc(100vw - 176px); max-height: min(860px, calc(100dvh - 48px)); overflow: visible; border: 1px solid rgba(255, 255, 255, .16); border-radius: var(--cs-radius-md); background: #171513; box-shadow: 0 28px 80px rgba(0, 0, 0, .38); }
+  &__header { position: relative; display: flex; justify-content: flex-end; min-width: 0; padding: 10px 12px; }
+  &__actions { display: flex; gap: 7px; button { display: grid; place-items: center; flex: 0 0 auto; width: 34px; height: 34px; padding: 0; border: 0; border-radius: 10px; background: rgba(255, 255, 255, .1); color: white; &:hover, &:focus-visible { background: rgba(255, 255, 255, .2); } &:focus-visible { outline: 2px solid white; outline-offset: 2px; } } }
+  &__tooltip { position: absolute; top: 51px; right: 12px; z-index: 3; max-width: min(280px, calc(100vw - 72px)); padding: 7px 9px; border-radius: 8px; background: rgba(255, 255, 255, .94); color: #2d2925; font-size: 11px; line-height: 1.35; overflow-wrap: anywhere; box-shadow: 0 8px 20px rgba(0, 0, 0, .24); }
+  &__content { display: grid; place-items: center; min-height: 0; width: fit-content; max-width: calc(100vw - 176px); overflow: hidden; border-radius: 0 0 var(--cs-radius-md) var(--cs-radius-md); background: #0d0c0b; img, video { display: block; width: auto; max-width: calc(100vw - 176px); height: auto; max-height: calc(min(860px, 100dvh - 48px) - 55px); object-fit: contain; } }
+  &__navigate { position: absolute; top: 50%; display: grid; place-items: center; width: 42px; height: 42px; padding: 0; border: 1px solid rgba(255, 255, 255, .25); border-radius: 50%; background: rgba(23, 21, 19, .7); color: white; transform: translateY(-50%); &:hover, &:focus-visible { background: rgba(255, 255, 255, .2); } &:focus-visible { outline: 2px solid white; outline-offset: 2px; } .icon { font-size: 28px; } &--previous { left: -64px; } &--next { right: -64px; } }
+  &__counter { position: absolute; right: 14px; bottom: 12px; padding: 4px 7px; border-radius: 7px; background: rgba(23, 21, 19, .72); color: rgba(255, 255, 255, .85); font-size: 10px; }
+}
+
+@keyframes media-viewer-fade { from { opacity: 0; } }
+
+@media (max-width: 720px) {
+  .media-gallery { gap: 8px; padding-bottom: 5px; scrollbar-width: none; &::-webkit-scrollbar { display: none; } &__item { flex-basis: 104px; } &__preview { width: 104px; height: 104px; border-radius: 12px; } }
+  .media-viewer { padding: 16px 60px; &__panel, &__content { max-width: calc(100vw - 120px); } &__content img, &__content video { max-width: calc(100vw - 120px); max-height: calc(100dvh - 87px); } &__navigate { width: 38px; height: 38px; &--previous { left: -50px; } &--next { right: -50px; } } }
+}
+
+@media (prefers-reduced-motion: reduce) { .media-gallery__preview, .media-viewer { animation: none; transition: none; } }
