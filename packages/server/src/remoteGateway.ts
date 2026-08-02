@@ -41,7 +41,7 @@ const hasValidSession = (cookieHeader: string | undefined) => {
 const safeReturnTo = (value: string | undefined) => value && value.startsWith("/") && !value.startsWith("//") ? value : "/";
 const escapeHtml = (value: string) => value.replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character] || character);
 
-const loginPage = (returnTo: string, invalidCredentials = false) => `<!doctype html>
+const loginPage = (returnTo: string, invalidCredentials = false, attemptedUsername = username) => `<!doctype html>
 <html lang="fr">
   <head>
     <meta charset="utf-8">
@@ -71,12 +71,12 @@ const loginPage = (returnTo: string, invalidCredentials = false) => `<!doctype h
   <body>
     <main class="remote-login" role="dialog" aria-modal="true" aria-labelledby="remote-login-title">
       <header><div class="mark" aria-hidden="true">C</div><div><span>Accès distant</span><h1 id="remote-login-title">Connexion à Consilium</h1></div></header>
-      <form method="post" action="${loginPath}">
+      <form method="post" action="${loginPath}" autocomplete="on">
         <p>Identifiez-vous pour ouvrir cette table ronde à distance.</p>
         ${invalidCredentials ? '<p class="error" role="alert">Identifiant ou mot de passe incorrect.</p>' : ""}
         <input type="hidden" name="returnTo" value="${escapeHtml(returnTo)}">
-        <label>Identifiant<input name="username" autocomplete="username" value="${escapeHtml(username)}" required autofocus></label>
-        <label>Mot de passe<input name="password" type="password" autocomplete="current-password" required></label>
+        <label for="remote-username">Identifiant<input id="remote-username" name="username" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" value="${escapeHtml(attemptedUsername)}" required autofocus></label>
+        <label for="remote-password">Mot de passe<input id="remote-password" name="password" type="password" autocomplete="current-password" required></label>
         <button type="submit">Accéder à la table</button>
       </form>
     </main>
@@ -92,7 +92,7 @@ app.post(loginPath, async (context) => {
   const returnTo = safeReturnTo(fields.get("returnTo") || undefined);
 
   if (!secureEqual(username, suppliedUsername) || !secureEqual(password, suppliedPassword)) {
-    return context.html(loginPage(returnTo, true), 401);
+    return context.html(loginPage(returnTo, true, suppliedUsername), 401);
   }
 
   const expiresAt = Date.now() + sessionDurationSeconds * 1000;

@@ -12,7 +12,7 @@
   scrollbar-width: thin;
   transition: max-height .48s cubic-bezier(.25, .7, .25, 1), margin .48s cubic-bezier(.25, .7, .25, 1), opacity .32s ease-out .08s;
 
-  &--active { max-height: 76px; margin-bottom: 18px; opacity: 1; }
+  &--active { max-height: 108px; margin-bottom: 18px; padding-bottom: 4px; opacity: 1; }
 
   &__item { display: flex; flex: 0 0 auto; align-items: flex-end; gap: 13px; animation: agent-typing-indicator-arrive .42s cubic-bezier(.25, .7, .25, 1) both; }
   &__item--leaving { animation: agent-typing-indicator-leave .42s ease-in both; }
@@ -45,7 +45,7 @@
 @media (max-width: 720px) {
   .agent-typing-indicator {
     gap: 14px;
-    &--active { max-height: 66px; margin-bottom: 14px; }
+    &--active { max-height: 92px; margin-bottom: 14px; padding-bottom: 4px; }
     &__item { gap: 8px; }
     &__avatar { flex-basis: 30px; width: 30px; height: 30px; border-radius: 9px; font-size: 8px; }
     &__content header { gap: 5px; margin-bottom: 5px; }

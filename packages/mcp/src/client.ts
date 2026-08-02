@@ -53,7 +53,7 @@ export class ConsiliumClient {
     return this.request<AuthorizationRequest>(`/api/authorizations/${id}/consume`, { method: "POST", body: JSON.stringify(input) });
   }
   listAgents() { return this.request<Agent[]>("/api/agents"); }
-  registerAgent(input: { id: string; name: string; model?: string; status: Agent["status"] }) {
+  registerAgent(input: { id: string; name: string; model?: string; status: Agent["status"]; activeTopicId?: string; activeTopicTitle?: string }) {
     return this.request<Agent>("/api/agents", { method: "POST", body: JSON.stringify(input) });
   }
   disconnectAgent(id: string) {

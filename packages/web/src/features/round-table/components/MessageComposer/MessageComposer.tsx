@@ -12,6 +12,7 @@ const draftDatabaseName = "consilium-composer-drafts";
 const draftStoreName = "drafts";
 
 interface ComposerDraft { body: string; files: File[]; }
+const pendingDraftWrites = new Map<string, Promise<void>>();
 
 const openDraftDatabase = () => new Promise<IDBDatabase>((resolve, reject) => {
   const request = indexedDB.open(draftDatabaseName, 1);
@@ -21,6 +22,7 @@ const openDraftDatabase = () => new Promise<IDBDatabase>((resolve, reject) => {
 });
 
 async function readDraft(topicId: string): Promise<ComposerDraft | undefined> {
+  await pendingDraftWrites.get(topicId);
   const database = await openDraftDatabase();
   return new Promise((resolve, reject) => {
     const transaction = database.transaction(draftStoreName, "readonly");
@@ -41,6 +43,19 @@ async function writeDraft(topicId: string, draft: ComposerDraft, remove = false)
     transaction.onerror = () => { database.close(); reject(transaction.error); };
     transaction.onabort = () => { database.close(); reject(transaction.error); };
   });
+}
+
+function queueDraftWrite(topicId: string, draft: ComposerDraft, remove = false) {
+  const previousWrite = pendingDraftWrites.get(topicId) || Promise.resolve();
+  const nextWrite = previousWrite
+    .catch(() => undefined)
+    .then(() => writeDraft(topicId, draft, remove));
+  const settledWrite = nextWrite.catch(() => undefined);
+  pendingDraftWrites.set(topicId, settledWrite);
+  void settledWrite.then(() => {
+    if (pendingDraftWrites.get(topicId) === settledWrite) pendingDraftWrites.delete(topicId);
+  });
+  return nextWrite;
 }
 
 export const MessageComposer = memo(function MessageComposer({ topicId, agents, disabled, replyTo, replyFocusRequest, onCancelReply, onSend }: {
@@ -65,6 +80,7 @@ export const MessageComposer = memo(function MessageComposer({ topicId, agents, 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const hasLocalChangesRef = useRef(false);
   const latestDraftRef = useRef<ComposerDraft>({ body, files });
+  const draftLoadVersionRef = useRef(0);
   const mentionAgents = agents
     .filter((agent) => connectedStatuses.has(agent.status))
     .filter((agent) => !mentionContext?.query || agent.id.includes(mentionContext.query) || agent.name.toLowerCase().includes(mentionContext.query))
@@ -73,9 +89,10 @@ export const MessageComposer = memo(function MessageComposer({ topicId, agents, 
   useEffect(() => { latestDraftRef.current = { body, files }; }, [body, files]);
   useEffect(() => {
     if (!topicId) return;
+    const loadVersion = ++draftLoadVersionRef.current;
     let cancelled = false;
     void readDraft(topicId).then((draft) => {
-      if (!cancelled && draft && !hasLocalChangesRef.current) {
+      if (!cancelled && loadVersion === draftLoadVersionRef.current && draft && !hasLocalChangesRef.current) {
         setBody(draft.body);
         setFiles(draft.files);
       }
@@ -84,11 +101,11 @@ export const MessageComposer = memo(function MessageComposer({ topicId, agents, 
   }, [topicId]);
   useEffect(() => {
     if (!topicId || !hasLocalChangesRef.current) return;
-    const timer = window.setTimeout(() => { void writeDraft(topicId, latestDraftRef.current).catch(() => undefined); }, 250);
+    const timer = window.setTimeout(() => { void queueDraftWrite(topicId, latestDraftRef.current).catch(() => undefined); }, 250);
     return () => window.clearTimeout(timer);
   }, [body, files, topicId]);
   useEffect(() => () => {
-    if (topicId && hasLocalChangesRef.current) void writeDraft(topicId, latestDraftRef.current).catch(() => undefined);
+    if (topicId && hasLocalChangesRef.current) void queueDraftWrite(topicId, latestDraftRef.current).catch(() => undefined);
   }, [topicId]);
   useEffect(() => {
     if (replyTo) {
@@ -105,9 +122,14 @@ export const MessageComposer = memo(function MessageComposer({ topicId, agents, 
     return () => window.cancelAnimationFrame(frame);
   }, [disabled, isSending, replyFocusRequest]);
 
+  const markLocalChange = () => {
+    hasLocalChangesRef.current = true;
+    draftLoadVersionRef.current += 1;
+  };
+
   const addFiles = (candidates: File[]) => {
     const accepted = candidates.filter((file) => file.size <= maximumFileSize);
-    if (accepted.length) hasLocalChangesRef.current = true;
+    if (accepted.length) markLocalChange();
     setFiles((current) => [...current, ...accepted]);
     setFileError(accepted.length === candidates.length ? "" : "Un fichier dépasse la limite de 25 Mo.");
   };
@@ -132,7 +154,7 @@ export const MessageComposer = memo(function MessageComposer({ topicId, agents, 
     if (!mentionContext) return;
     const nextBody = `${body.slice(0, mentionContext.start)}@${agent.id} ${body.slice(mentionContext.end)}`;
     const cursor = mentionContext.start + agent.id.length + 2;
-    hasLocalChangesRef.current = true;
+    markLocalChange();
     setBody(nextBody);
     setMentionContext(undefined);
     requestAnimationFrame(() => {
@@ -144,6 +166,7 @@ export const MessageComposer = memo(function MessageComposer({ topicId, agents, 
     if (isSending || (!body.trim() && !files.length)) return;
     const startedAt = Date.now();
     let sent = false;
+    draftLoadVersionRef.current += 1;
     setIsSending(true);
     try {
       await onSend(body.trim() || "Fichier partagé", files, replyTo?.id);
@@ -154,7 +177,7 @@ export const MessageComposer = memo(function MessageComposer({ topicId, agents, 
       setFileError("");
       onCancelReply();
       hasLocalChangesRef.current = false;
-      if (topicId) void writeDraft(topicId, { body: "", files: [] }, true).catch(() => undefined);
+      if (topicId) void queueDraftWrite(topicId, { body: "", files: [] }, true).catch(() => undefined);
       sent = true;
     } finally {
       setIsSending(false);
@@ -185,12 +208,12 @@ export const MessageComposer = memo(function MessageComposer({ topicId, agents, 
         <span className="message-composer__reply-copy"><strong>Réponse à {renderedReply.authorName}</strong><small>{renderedReply.body || "Pièce jointe"}</small></span>
         <button type="button" onClick={onCancelReply} disabled={isSending} aria-label="Annuler la réponse"><Icon name="close" /></button>
       </div>}
-      {files.length > 0 && <AttachmentList files={files} onRemove={(index) => { hasLocalChangesRef.current = true; setFiles((current) => current.filter((_, candidate) => candidate !== index)); }} />}
+      {files.length > 0 && <AttachmentList files={files} onRemove={(index) => { markLocalChange(); setFiles((current) => current.filter((_, candidate) => candidate !== index)); }} />}
       <textarea
         ref={textareaRef}
         value={body}
         disabled={disabled || isSending}
-        onChange={(event) => { hasLocalChangesRef.current = true; setBody(event.target.value); updateMentionContext(event.target.value, event.target.selectionStart); }}
+        onChange={(event) => { markLocalChange(); setBody(event.target.value); updateMentionContext(event.target.value, event.target.selectionStart); }}
         onClick={(event) => updateMentionContext(event.currentTarget.value, event.currentTarget.selectionStart)}
         onPaste={handlePaste}
         onKeyDown={(event) => {
@@ -222,7 +245,6 @@ export const MessageComposer = memo(function MessageComposer({ topicId, agents, 
       {isDraggingFiles && <div className="message-composer__drop-hint"><Icon name="upload_file" />Déposer les fichiers ici</div>}
       <div className="message-composer__tools">
         <button type="button" disabled={isSending} onClick={() => inputRef.current?.click()} aria-label="Joindre des fichiers"><Icon name="add" /></button>
-        <button type="button" disabled={isSending} aria-label="Insérer du code"><Icon name="code" /></button>
         <span className={fileError ? "message-composer__limit message-composer__limit--error" : "message-composer__limit"} role={fileError ? "alert" : undefined}>{fileError || "25 Mo maximum par fichier"}</span>
         <button type="button" className={`message-composer__send${isSending ? " message-composer__send--sending" : ""}`} disabled={(!body.trim() && !files.length) || disabled || isSending} onClick={() => void submit()} aria-label={isSending ? "Envoi en cours" : "Envoyer"} aria-busy={isSending}><Icon name="arrow_upward" /></button>
       </div>

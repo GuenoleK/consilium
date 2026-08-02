@@ -1,20 +1,33 @@
 .round-table {
   display: grid; grid-template-columns: 260px minmax(0, 1fr) 320px; height: 100%; min-height: 0; overflow: hidden; border: 1px solid var(--cs-color-border); border-radius: var(--cs-radius-lg); background: var(--cs-color-surface); box-shadow: var(--cs-shadow-card);
+  &--left-collapsed { grid-template-columns: 0 minmax(0, 1fr) 320px; .topic-list { visibility: hidden; } }
+  &--right-collapsed { grid-template-columns: 260px minmax(0, 1fr) 0; .agent-panel { visibility: hidden; } }
+  &.round-table--left-collapsed.round-table--right-collapsed { grid-template-columns: 0 minmax(0, 1fr) 0; }
   &__conversation { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; min-width: 0; min-height: 0; overflow: hidden; background: linear-gradient(180deg, #fbf8f2 0%, var(--cs-color-bg) 100%); }
   &__header { display: flex; justify-content: space-between; align-items: center; padding: 20px 26px; border-bottom: 1px solid var(--cs-color-border); background: rgba(255,253,248,.9); > div { display: flex; align-items: center; gap: 12px; } h1 { margin: 0; font: 700 16px var(--cs-font-heading); } p { margin: 4px 0 0; color: var(--cs-color-text-muted); font-size: 11px; } }
   &__topic, &__topic-copy { min-width: 0; }
   &__topic-copy h1, &__topic-copy p { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   &__topic-icon { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 12px; background: var(--cs-color-accent-soft); color: var(--cs-color-accent-strong); }
   &__actions button { display: grid; place-items: center; width: 34px; height: 34px; border: 0; border-radius: 10px; background: transparent; color: var(--cs-color-text-muted); &:hover { background: var(--cs-color-surface-soft); } }
+  &__panel-toggle, &__settings { display: grid; place-items: center; flex: 0 0 34px; width: 34px; height: 34px; border: 0; border-radius: 10px; background: transparent; color: var(--cs-color-text-muted); &:hover { background: var(--cs-color-surface-soft); color: var(--cs-color-text); } }
   &__mobile-nav, &__mobile-participants, &__mobile-backdrop { display: none; }
   &__error { align-self: center; justify-self: center; display: flex; align-items: center; gap: 9px; max-width: 390px; padding: 16px; border-radius: var(--cs-radius-md); background: var(--cs-color-accent-soft); color: var(--cs-color-accent-strong); font-size: 12px; }
   &__composer-area { min-width: 0; }
 }
-@media (max-width: 1050px) { .round-table { grid-template-columns: 230px minmax(0, 1fr); } .agent-panel { display: none; } }
+@media (max-width: 1050px) {
+  .round-table { grid-template-columns: 230px minmax(0, 1fr); }
+  .round-table.round-table--left-collapsed { grid-template-columns: 0 minmax(0, 1fr); }
+  .round-table.round-table--right-collapsed, .round-table.round-table--left-collapsed.round-table--right-collapsed { grid-template-columns: 230px minmax(0, 1fr); }
+  .agent-panel { display: none; }
+  .round-table__panel-toggle--right { display: none; }
+}
 @media (max-width: 720px) {
   .consilium-app { height: 100dvh; padding: 0; }
   .round-table {
     grid-template-columns: minmax(0, 1fr); height: 100dvh; border: 0; border-radius: 0;
+    &.round-table--left-collapsed,
+    &.round-table--right-collapsed,
+    &.round-table--left-collapsed.round-table--right-collapsed { grid-template-columns: minmax(0, 1fr); }
     &__header { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 4px; min-height: 66px; padding: 10px 10px 10px 8px; }
     &__topic { gap: 7px !important; }
     &__topic-icon { display: none; }
@@ -25,7 +38,8 @@
     &__mobile-participants { margin-left: 2px; border: 1px solid var(--cs-color-border); background: var(--cs-color-surface); color: var(--cs-color-text); }
     &__mobile-participants .icon { font-size: 21px; }
     &__actions { gap: 0 !important; }
-    &__actions > .remote-access-indicator, &__actions > button:not(.notification-toggle) { display: none; }
+    &__panel-toggle { display: none; }
+    &__settings { display: grid !important; }
     &__mobile-backdrop { position: fixed; z-index: 8; inset: 0; display: block; width: 100%; height: 100%; border: 0; background: rgba(43, 36, 31, .28); backdrop-filter: blur(2px); }
   }
   .topic-list, .agent-panel {
@@ -33,6 +47,7 @@
   }
   .topic-list { left: 0; padding-top: calc(20px + env(safe-area-inset-top)); transform: translateX(-105%); }
   .agent-panel { right: 0; flex-direction: column; padding-top: calc(20px + env(safe-area-inset-top)); transform: translateX(105%); }
+  .round-table--left-collapsed .topic-list, .round-table--right-collapsed .agent-panel { visibility: visible; }
   .round-table--topics-open .topic-list, .round-table--agents-open .agent-panel { transform: translateX(0); }
   .topic-list__brand { padding-bottom: 22px; }
   .topic-list__mobile-close { display: grid; place-items: center; width: 34px; height: 34px; margin-left: auto; border: 0; border-radius: 10px; background: var(--cs-color-surface-soft); color: var(--cs-color-text-muted); }

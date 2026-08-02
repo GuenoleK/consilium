@@ -213,11 +213,13 @@ export class ConsiliumStore {
     const currentTime = Date.now();
     return this.snapshot.agents.map((agent) => {
       const isStale = currentTime - new Date(agent.lastSeenAt).getTime() > presenceStaleAfterMs;
-      return isStale && activeAgentStatuses.has(agent.status) ? { ...agent, status: "away" as const } : agent;
+      return isStale && activeAgentStatuses.has(agent.status)
+        ? { ...agent, status: "away" as const, activeTopicId: undefined, activeTopicTitle: undefined }
+        : agent;
     });
   }
 
-  async registerAgent(input: Pick<Agent, "id" | "name" | "model" | "status">) {
+  async registerAgent(input: Pick<Agent, "id" | "name" | "model" | "status" | "activeTopicId" | "activeTopicTitle">) {
     await this.ensureLoaded();
     const normalizedInput = {
       ...input,
@@ -231,6 +233,8 @@ export class ConsiliumStore {
       Object.assign(found, {
         name: agent.name,
         status: agent.status,
+        activeTopicId: agent.activeTopicId,
+        activeTopicTitle: agent.activeTopicTitle,
         lastSeenAt: agent.lastSeenAt,
         ...(agent.model ? { model: agent.model } : {}),
       });
@@ -246,6 +250,8 @@ export class ConsiliumStore {
     const agent = this.snapshot.agents.find((candidate) => candidate.id === id);
     if (!agent) return undefined;
     agent.status = "offline";
+    agent.activeTopicId = undefined;
+    agent.activeTopicTitle = undefined;
     agent.lastSeenAt = now();
     await this.persist();
     return agent;

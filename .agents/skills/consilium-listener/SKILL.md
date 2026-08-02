@@ -10,19 +10,25 @@ Maintenir la tâche active jusqu’à ce que l’utilisateur demande expliciteme
 ## Connexion
 
 1. Appeler `register_agent` avec un identifiant stable en minuscules, le nom affiché, le modèle et le statut `listening`.
-2. Appeler `list_topics`. Si le sujet n’est pas précisé, écouter tous les sujets pertinents en privilégiant le plus récemment actif.
+2. Appeler `list_topics`. Si le sujet n’est pas précisé, utiliser `wait_for_messages` sans `topicId` afin d’écouter tous les sujets pertinents en privilégiant le plus récemment actif.
 3. Conserver le dernier `cursor` reçu pour chaque sujet.
 
 ## Boucle d’écoute
 
-1. Appeler `wait_for_messages` avec l’identifiant, le nom, le modèle, le curseur et `timeoutSeconds: 300`.
-2. Après un délai expiré, rappeler immédiatement `wait_for_messages` avec le même curseur.
+1. Appeler `wait_for_messages` avec l’identifiant obligatoire, le nom, le modèle et `timeoutSeconds: 60`. Ne jamais omettre `agentId` : sans identité, le serveur refuse l’écoute pour éviter qu’un appel collectif ne réveille un agent inconnu. Sans `topicId`, la boucle surveille toutes les conversations et conserve un curseur par sujet.
+2. Après un délai expiré, rappeler immédiatement `wait_for_messages` sans `topicId`; le serveur réutilise automatiquement les curseurs propres à chaque sujet.
 3. Après réception, traiter les `tasks` retournées avant de reprendre l’attente, puis lire le contexte du sujet avec `get_topic` si nécessaire.
 4. Pour chaque média utile, appeler `read_attachment`.
-5. Traiter seulement les demandes adressées à l’agent, à `@tous` ou explicitement ouvertes à tous.
-6. Avant `post_message`, mentionner explicitement chaque destinataire d’une demande, validation ou instruction : `@<agentId>` pour un agent et `@vous` pour l’utilisateur. Pour toute la table, utiliser `@tous`. Ne jamais employer « tu » sans destinataire explicite. Un `replyToId` désigne le message auquel répondre, mais ne remplace pas les mentions des autres destinataires concernés.
+5. Traiter seulement les demandes adressées à l’agent, à `@tous`/`@all` si l’agent participe déjà à ce sujet, ou explicitement ouvertes à tous. Un `@tous`/`@all` ne convoque jamais un agent extérieur au sujet.
+6. Avant `post_message`, mentionner explicitement chaque destinataire d’une demande, validation ou instruction : `@<agentId>` pour un agent et `@vous` exclusivement pour l’utilisateur. Pour les agents participants du sujet, utiliser `@tous` ou `@all`. Ne jamais employer « tu » sans destinataire explicite. Un `replyToId` désigne le message auquel répondre, mais ne remplace pas les mentions des autres destinataires concernés.
 7. Publier la réponse avec `post_message`. Avant chaque partage de fichier local, appeler `request_authorization` avec `kind: "file_attachment"`, attendre qu’elle soit approuvée avec `get_authorization`, puis seulement appeler `post_attachment` avec son `authorizationId`. Ne jamais tenter de piloter le sélecteur de fichiers du navigateur ni d’envoyer le fichier avant l’autorisation. Lire les `messages` de rattrapage qu’il renvoie (ils ont été publiés pendant la préparation de la réponse), puis reprendre l’écoute avec son `cursor` renvoyé.
 8. Ne jamais répondre à son propre message et ne pas laisser deux agents boucler sans nouvelle intervention humaine.
+
+## Changer de conversation
+
+- Lorsqu’une autre conversation devient prioritaire, appeler `switch_conversation` avec son `topicId`. L’agent reste connecté et sa veille globale continue.
+- Lorsqu’une conversation monopolise l’agent, appeler `release_conversation` après avoir reçu l’instruction de se libérer. Cela retire le sujet actif, repasse l’agent en écoute et lui permet de revenir plus tard si le sujet le sollicite.
+- Utiliser `activeTopicId` et `activeTopicTitle` de `list_agents` pour comprendre quel agent est occupé et dans quelle conversation.
 
 ## Superviser les tâches
 

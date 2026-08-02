@@ -1,0 +1,45 @@
+.settings-dialog {
+  position: fixed; z-index: 30; inset: 0; display: grid; place-items: center; padding: 24px; background: rgba(45, 41, 37, .42); backdrop-filter: blur(5px); animation: settings-dialog-backdrop .18s ease-out;
+
+  &--closing { pointer-events: none; animation: settings-dialog-backdrop-out .18s ease-in forwards; }
+  &--closing &__panel { animation: settings-dialog-panel-out .18s ease-in forwards; }
+  &__panel { width: min(100%, 520px); overflow: hidden; border: 1px solid rgba(222, 213, 200, .9); border-radius: var(--cs-radius-lg); background: var(--cs-color-surface); box-shadow: 0 28px 80px rgba(45, 41, 37, .2); animation: settings-dialog-panel .22s cubic-bezier(.2, .8, .2, 1); }
+  &__header { display: grid; grid-template-columns: 44px minmax(0, 1fr) 34px; align-items: center; gap: 12px; padding: 22px; border-bottom: 1px solid var(--cs-color-border); background: linear-gradient(135deg, #fffdf8 0%, #fbf2e8 100%); }
+  &__header > div > span { color: var(--cs-color-accent); font-size: 10px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+  &__header h2 { margin: 4px 0 0; font: 700 20px var(--cs-font-heading); }
+  &__header > button { display: grid; place-items: center; width: 34px; height: 34px; padding: 0; border: 0; border-radius: 10px; background: transparent; color: var(--cs-color-text-muted); &:hover { background: var(--cs-color-surface-warm); color: var(--cs-color-text); } }
+  &__icon { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 14px; background: var(--cs-color-accent-soft); color: var(--cs-color-accent-strong); }
+  &__body { display: grid; gap: 14px; padding: 20px; }
+  &__section { display: grid; gap: 14px; padding: 15px; border: 1px solid var(--cs-color-border); border-radius: var(--cs-radius-md); background: #fffefa; }
+  &__section-heading { display: flex; align-items: flex-start; gap: 11px; }
+  &__section-icon { display: grid; place-items: center; flex: 0 0 34px; width: 34px; height: 34px; border-radius: 10px; background: var(--cs-color-accent-soft); color: var(--cs-color-accent-strong); }
+  &__section-heading strong { display: block; font-size: 13px; }
+  &__section-heading p { margin: 4px 0 0; color: var(--cs-color-text-muted); font-size: 11px; line-height: 1.45; }
+  &__setting-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-top: 12px; border-top: 1px solid var(--cs-color-border); color: var(--cs-color-text-muted); font-size: 10px; line-height: 1.4; }
+  &__setting-row > span { max-width: 350px; }
+  &__setting-row .notification-toggle { flex: 0 0 34px; width: 34px; height: 34px; border-radius: 10px; }
+  &__connection { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 12px; border-top: 1px solid var(--cs-color-border); }
+  &__connection span { display: flex; align-items: center; gap: 7px; color: var(--cs-color-green); font-size: 11px; font-weight: 700; }
+  &__connection i { width: 7px; height: 7px; border-radius: 50%; background: #35a779; box-shadow: 0 0 0 3px rgba(53, 167, 121, .12); }
+  &__connection small { color: var(--cs-color-text-muted); font-size: 10px; }
+  &__sync { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 36px; padding: 0 13px; border: 1px solid var(--cs-color-border); border-radius: 10px; background: var(--cs-color-surface); color: var(--cs-color-text-muted); font-size: 11px; font-weight: 700; &:hover:not(:disabled) { border-color: #b8cbbf; background: #f5faf7; color: var(--cs-color-green); } &:disabled { cursor: wait; opacity: .6; } .icon { font-size: 17px; } }
+}
+
+@keyframes settings-dialog-backdrop { from { opacity: 0; } }
+@keyframes settings-dialog-panel { from { opacity: 0; transform: translateY(10px) scale(.98); } }
+@keyframes settings-dialog-backdrop-out { to { opacity: 0; } }
+@keyframes settings-dialog-panel-out { to { opacity: 0; transform: translateY(8px) scale(.985); } }
+
+@media (max-width: 720px) {
+  .settings-dialog { place-items: end center; padding: 0; }
+  .settings-dialog__panel { width: 100%; border-width: 1px 0 0; border-radius: 24px 24px 0 0; padding-bottom: env(safe-area-inset-bottom); }
+  .settings-dialog__header { padding: 18px; }
+  .settings-dialog__header h2 { font-size: 18px; }
+  .settings-dialog__body { padding: 16px; }
+  .settings-dialog__connection { align-items: flex-start; flex-direction: column; gap: 5px; }
+  .settings-dialog__sync { width: 100%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .settings-dialog, .settings-dialog__panel { animation: none; }
+}

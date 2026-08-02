@@ -25,7 +25,6 @@
   &__agent--away { opacity: .7; }
   &__disconnect { grid-column: 3; display: grid; place-items: center; width: 30px; height: 30px; border: 0; border-radius: 9px; background: transparent; color: var(--cs-color-text-muted); opacity: 0; transition: opacity .15s, background .15s; .icon { font-size: 17px; } &:hover { background: var(--cs-color-accent-soft); color: var(--cs-color-accent-strong); } }
   &__agent:hover &__disconnect, &__disconnect:focus-visible { opacity: 1; }
-  &__context { margin: 22px 0 20px; padding: 13px; border: 1px solid #e3d5c4; border-radius: var(--cs-radius-md); background: #fbf4e9; div, span { display: flex; align-items: center; gap: 8px; } div { color: var(--cs-color-accent-strong); } strong { font-size: 11px; } p { margin: 9px 0; color: var(--cs-color-text-muted); font-size: 9px; line-height: 1.5; } span { color: var(--cs-color-green); font-size: 9px; .icon { font-size: 13px; } } }
 }
 @keyframes agent-panel-spin { to { transform: rotate(360deg); } }
 @keyframes agent-panel-thinking-wave {

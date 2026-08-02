@@ -13,6 +13,7 @@ const statusLabels: Record<Agent["status"], string> = {
 };
 interface AgentPanelProps {
   agents: Agent[];
+  activeTopicId?: string;
   tasks: ConsiliumTask[];
   onDisconnect: (id: string) => void;
   onRefreshAgents: () => Promise<void>;
@@ -22,7 +23,7 @@ interface AgentPanelProps {
   onCancelTask: (taskId: string) => Promise<void>;
   onMobileClose?: () => void;
 }
-export function AgentPanel({ agents, tasks, onDisconnect, onRefreshAgents, onCreateTask, onTaskInstruction, onResolveApproval, onCancelTask, onMobileClose }: AgentPanelProps) {
+export function AgentPanel({ agents, activeTopicId, tasks, onDisconnect, onRefreshAgents, onCreateTask, onTaskInstruction, onResolveApproval, onCancelTask, onMobileClose }: AgentPanelProps) {
   const { spinning: refreshing, runSpinCycle } = useSpinCycle();
   const connectedAgents = agents.filter((agent) => agent.status !== "offline" && agent.status !== "away");
   const visibleAgents = agents.filter((agent) => agent.status !== "offline");
@@ -37,7 +38,7 @@ export function AgentPanel({ agents, tasks, onDisconnect, onRefreshAgents, onCre
         <div>
           <strong>{agent.name}</strong>
           <small className="agent-panel__agent-meta">
-            <span>{agent.model || "Modèle non déclaré"} · {statusLabels[agent.status]}</span>
+            <span>{agent.status === "working" && agent.activeTopicId && agent.activeTopicId !== activeTopicId ? `Occupé dans « ${agent.activeTopicTitle || "une autre conversation"} »` : `${agent.model || "Modèle non déclaré"} · ${statusLabels[agent.status]}`}</span>
             {agent.status === "working" && <span className="agent-panel__thinking" aria-label="Réflexion en cours">
               <i /><i /><i />
             </span>}
@@ -47,7 +48,6 @@ export function AgentPanel({ agents, tasks, onDisconnect, onRefreshAgents, onCre
       </div>)}
       {visibleAgents.length === 0 && <p className="agent-panel__empty">Aucun agent enregistré. Demandez à un agent de rejoindre Consilium.</p>}
     </div>
-    <div className="agent-panel__context"><div><Icon name="neurology" /><strong>Mémoire commune</strong></div><p>Chaque message et décision de ce sujet est accessible aux agents connectés via MCP.</p><span><Icon name="sync" />Synchronisée à l’instant</span></div>
     <TaskQueue tasks={tasks} agents={connectedAgents} onCreate={onCreateTask} onInstruction={onTaskInstruction} onResolve={onResolveApproval} onCancel={onCancelTask} />
   </aside>;
 }

@@ -53,6 +53,8 @@ export const agentSchema = z.object({
   name: z.string(),
   model: z.string().optional(),
   status: agentStatusSchema,
+  activeTopicId: z.string().optional(),
+  activeTopicTitle: z.string().optional(),
   lastSeenAt: z.string(),
 });
 
