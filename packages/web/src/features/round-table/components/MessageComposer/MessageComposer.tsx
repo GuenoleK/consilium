@@ -78,6 +78,7 @@ export const MessageComposer = memo(function MessageComposer({ topicId, agents, 
   const [isReplyLeaving, setIsReplyLeaving] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const isSubmittingRef = useRef(false);
   const hasLocalChangesRef = useRef(false);
   const latestDraftRef = useRef<ComposerDraft>({ body, files });
   const draftLoadVersionRef = useRef(0);
@@ -163,15 +164,17 @@ export const MessageComposer = memo(function MessageComposer({ topicId, agents, 
     });
   };
   const submit = async () => {
-    if (isSending || (!body.trim() && !files.length)) return;
+    if (isSubmittingRef.current || isSending || (!body.trim() && !files.length)) return;
+    isSubmittingRef.current = true;
     const startedAt = Date.now();
     let sent = false;
     draftLoadVersionRef.current += 1;
+    setMentionContext(undefined);
     setIsSending(true);
     try {
+      // Give the browser one frame to render the sending state before uploading large media.
+      await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
       await onSend(body.trim() || "Fichier partagé", files, replyTo?.id);
-      const remainingFeedbackTime = Math.max(0, 450 - (Date.now() - startedAt));
-      if (remainingFeedbackTime) await new Promise((resolve) => window.setTimeout(resolve, remainingFeedbackTime));
       setBody("");
       setFiles([]);
       setFileError("");
@@ -179,7 +182,10 @@ export const MessageComposer = memo(function MessageComposer({ topicId, agents, 
       hasLocalChangesRef.current = false;
       if (topicId) void queueDraftWrite(topicId, { body: "", files: [] }, true).catch(() => undefined);
       sent = true;
+      const remainingFeedbackTime = Math.max(0, 450 - (Date.now() - startedAt));
+      if (remainingFeedbackTime) await new Promise((resolve) => window.setTimeout(resolve, remainingFeedbackTime));
     } finally {
+      isSubmittingRef.current = false;
       setIsSending(false);
     }
     if (sent) requestAnimationFrame(() => textareaRef.current?.focus());
@@ -245,8 +251,8 @@ export const MessageComposer = memo(function MessageComposer({ topicId, agents, 
       {isDraggingFiles && <div className="message-composer__drop-hint"><Icon name="upload_file" />Déposer les fichiers ici</div>}
       <div className="message-composer__tools">
         <button type="button" disabled={isSending} onClick={() => inputRef.current?.click()} aria-label="Joindre des fichiers"><Icon name="add" /></button>
-        <span className={fileError ? "message-composer__limit message-composer__limit--error" : "message-composer__limit"} role={fileError ? "alert" : undefined}>{fileError || "25 Mo maximum par fichier"}</span>
-        <button type="button" className={`message-composer__send${isSending ? " message-composer__send--sending" : ""}`} disabled={(!body.trim() && !files.length) || disabled || isSending} onClick={() => void submit()} aria-label={isSending ? "Envoi en cours" : "Envoyer"} aria-busy={isSending}><Icon name="arrow_upward" /></button>
+        <span className={fileError ? "message-composer__limit message-composer__limit--error" : "message-composer__limit"} role={fileError ? "alert" : undefined}>{isSending ? (files.length ? "Envoi des médias…" : "Envoi en cours…") : fileError || "25 Mo maximum par fichier"}</span>
+        <button type="button" className={`message-composer__send${isSending ? " message-composer__send--sending" : ""}`} disabled={(!body.trim() && !files.length) || disabled || isSending} onClick={() => void submit()} aria-label={isSending ? (files.length ? "Envoi des médias en cours" : "Envoi en cours") : "Envoyer"} title={isSending ? (files.length ? "Envoi des médias en cours" : "Envoi en cours") : "Envoyer"} aria-busy={isSending}><Icon name="arrow_upward" /></button>
       </div>
     </div>
     <small>Les agents mentionnés, ou celui auquel vous répondez, reçoivent le message et peuvent ouvrir ses fichiers via MCP.</small>

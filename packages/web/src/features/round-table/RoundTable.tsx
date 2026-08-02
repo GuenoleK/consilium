@@ -339,6 +339,7 @@ export function RoundTable() {
         <MessageComposer key={activeId} topicId={activeId} agents={agents} disabled={!activeId || Boolean(error)} replyTo={replyTo} replyFocusRequest={replyFocusRequest?.topicId === activeId ? replyFocusRequest?.id : undefined} onCancelReply={() => setReplyTo(undefined)} onSend={sendMessage} />
       </div>
     </section>
+    {!rightPanelCollapsed && <button className="round-table__tablet-backdrop" onClick={() => setRightPanelCollapsed(true)} aria-label="Fermer le volet des participants" />}
     <AgentPanel
       agents={agents}
       activeTopicId={activeId}
@@ -349,6 +350,7 @@ export function RoundTable() {
       onTaskInstruction={addTaskInstruction}
       onResolveApproval={resolveApproval}
       onCancelTask={cancelTask}
+      onClose={() => setRightPanelCollapsed(true)}
       onMobileClose={closeMobilePanel}
     />
     {mobilePanel && <button className="round-table__mobile-backdrop" onClick={closeMobilePanel} aria-label="Fermer le panneau" />}
