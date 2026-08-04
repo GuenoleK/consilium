@@ -110,6 +110,7 @@ export const taskSchema = z.object({
   progress: z.number().int().min(0).max(100),
   result: z.string().optional(),
   error: z.string().optional(),
+  archivedAt: z.string().datetime().optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
   instructions: z.array(taskInstructionSchema),

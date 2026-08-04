@@ -263,7 +263,7 @@ export class ConsiliumStore {
     return this.snapshot.tasks
       .filter((task) => !filters.topicId || task.topicId === filters.topicId)
       .filter((task) => !filters.assignedAgentId || task.assignedAgentId === filters.assignedAgentId)
-      .filter((task) => !filters.activeOnly || !terminalStatuses.includes(task.status))
+      .filter((task) => !filters.activeOnly || (!task.archivedAt && !terminalStatuses.includes(task.status)))
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   }
 
@@ -364,6 +364,35 @@ export class ConsiliumStore {
   async cancelTask(id: string, requestedBy: string) {
     const task = await this.updateTask(id, { status: "cancelled", error: `Cancelled by ${requestedBy}` });
     return task;
+  }
+
+  async archiveTask(id: string) {
+    await this.ensureLoaded();
+    const task = this.snapshot.tasks.find((candidate) => candidate.id === id);
+    if (!task) return undefined;
+    task.archivedAt ??= now();
+    task.updatedAt = now();
+    await this.persist();
+    return task;
+  }
+
+  async unarchiveTask(id: string) {
+    await this.ensureLoaded();
+    const task = this.snapshot.tasks.find((candidate) => candidate.id === id);
+    if (!task) return undefined;
+    delete task.archivedAt;
+    task.updatedAt = now();
+    await this.persist();
+    return task;
+  }
+
+  async deleteTask(id: string) {
+    await this.ensureLoaded();
+    const taskIndex = this.snapshot.tasks.findIndex((candidate) => candidate.id === id);
+    if (taskIndex < 0) return false;
+    this.snapshot.tasks.splice(taskIndex, 1);
+    await this.persist();
+    return true;
   }
 
   async listAuthorizations(topicId: string) {

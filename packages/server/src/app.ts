@@ -188,5 +188,17 @@ export const createApp = (store = new ConsiliumStore()) => {
     const task = await store.cancelTask(context.req.param("id"), input.requestedBy);
     return task ? context.json(task) : context.json({ error: "Task not found" }, 404);
   });
+  app.post("/api/tasks/:id/archive", async (context) => {
+    const task = await store.archiveTask(context.req.param("id"));
+    return task ? context.json(task) : context.json({ error: "Task not found" }, 404);
+  });
+  app.post("/api/tasks/:id/unarchive", async (context) => {
+    const task = await store.unarchiveTask(context.req.param("id"));
+    return task ? context.json(task) : context.json({ error: "Task not found" }, 404);
+  });
+  app.delete("/api/tasks/:id", async (context) => {
+    const deleted = await store.deleteTask(context.req.param("id"));
+    return deleted ? context.body(null, 204) : context.json({ error: "Task not found" }, 404);
+  });
   return app;
 };

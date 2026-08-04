@@ -53,4 +53,7 @@ export const api = {
   cancelTask: (taskId: string) => request<ConsiliumTask>(`/tasks/${taskId}/cancel`, {
     method: "POST", body: JSON.stringify({ requestedBy: "human" }),
   }),
+  archiveTask: (taskId: string) => request<ConsiliumTask>(`/tasks/${taskId}/archive`, { method: "POST" }),
+  unarchiveTask: (taskId: string) => request<ConsiliumTask>(`/tasks/${taskId}/unarchive`, { method: "POST" }),
+  deleteTask: (taskId: string) => request<void>(`/tasks/${taskId}`, { method: "DELETE" }),
 };

@@ -20,11 +20,14 @@ interface AgentPanelProps {
   onCreateTask: (input: { title: string; description: string; assignedAgentId?: string }) => Promise<void>;
   onTaskInstruction: (taskId: string, body: string) => Promise<void>;
   onResolveApproval: (taskId: string, approvalId: string, decision: "approved" | "rejected", note?: string) => Promise<void>;
-  onCancelTask: (taskId: string) => Promise<void>;
+  onCancelTask: (taskId: string) => void | Promise<void>;
+  onArchiveTask: (taskId: string) => Promise<void>;
+  onUnarchiveTask: (taskId: string) => Promise<void>;
+  onDeleteTask: (taskId: string) => void | Promise<void>;
   onClose?: () => void;
   onMobileClose?: () => void;
 }
-export function AgentPanel({ agents, activeTopicId, tasks, onDisconnect, onRefreshAgents, onCreateTask, onTaskInstruction, onResolveApproval, onCancelTask, onClose, onMobileClose }: AgentPanelProps) {
+export function AgentPanel({ agents, activeTopicId, tasks, onDisconnect, onRefreshAgents, onCreateTask, onTaskInstruction, onResolveApproval, onCancelTask, onArchiveTask, onUnarchiveTask, onDeleteTask, onClose, onMobileClose }: AgentPanelProps) {
   const { spinning: refreshing, runSpinCycle } = useSpinCycle();
   const connectedAgents = agents.filter((agent) => agent.status !== "offline" && agent.status !== "away");
   const visibleAgents = agents.filter((agent) => agent.status !== "offline");
@@ -49,6 +52,16 @@ export function AgentPanel({ agents, activeTopicId, tasks, onDisconnect, onRefre
       </div>)}
       {visibleAgents.length === 0 && <p className="agent-panel__empty">Aucun agent enregistré. Demandez à un agent de rejoindre Consilium.</p>}
     </div>
-    <TaskQueue tasks={tasks} agents={connectedAgents} onCreate={onCreateTask} onInstruction={onTaskInstruction} onResolve={onResolveApproval} onCancel={onCancelTask} />
+    <TaskQueue
+      tasks={tasks}
+      agents={connectedAgents}
+      onCreate={onCreateTask}
+      onInstruction={onTaskInstruction}
+      onResolve={onResolveApproval}
+      onCancel={onCancelTask}
+      onArchive={onArchiveTask}
+      onUnarchive={onUnarchiveTask}
+      onDelete={onDeleteTask}
+    />
   </aside>;
 }

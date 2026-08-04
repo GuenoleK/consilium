@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Agent, AuthorizationRequest, ConsiliumTask, Message, Topic } from "@consilium/core";
 import { api } from "../../core/api";
+import { ConfirmDialog } from "../../shared/components/ConfirmDialog/ConfirmDialog";
 import { Icon } from "../../shared/components/Icon/Icon";
 import { useSystemNotifications, type AttentionEvent } from "../notifications/useSystemNotifications";
 import { AgentPanel } from "./components/AgentPanel/AgentPanel";
@@ -16,6 +17,16 @@ import "./RoundTable.scss";
 const MESSAGE_PAGE_SIZE = 60;
 const POLL_INTERVAL = 3000;
 const TOPIC_READ_COUNTS_STORAGE_KEY = "consilium-topic-read-message-counts";
+
+interface ConfirmationRequest {
+  title: string;
+  message: string;
+  confirmLabel: string;
+  confirmIcon: string;
+  icon: string;
+  danger?: boolean;
+  onConfirm: () => Promise<void>;
+}
 
 const readTopicReadCounts = (): Record<string, number> => {
   try {
@@ -89,6 +100,7 @@ export function RoundTable() {
   const [rightPanelCollapsed, setRightPanelCollapsed] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [newTopicOpen, setNewTopicOpen] = useState(false);
+  const [confirmation, setConfirmation] = useState<ConfirmationRequest>();
   const [initialTopicLoaded, setInitialTopicLoaded] = useState(false);
   const [readMessageCounts, setReadMessageCounts] = useState<Record<string, number>>(readTopicReadCounts);
   const activeIdRef = useRef<string | undefined>(undefined);
@@ -142,7 +154,7 @@ export function RoundTable() {
       title: "Autorisation demandée",
       body: `${authorization.requestedByName} souhaite ${authorization.action}.`,
     })),
-    ...tasks.flatMap((task) => task.approvals.filter((approval) => approval.status === "pending").map((approval) => ({
+    ...tasks.filter((task) => !task.archivedAt).flatMap((task) => task.approvals.filter((approval) => approval.status === "pending").map((approval) => ({
       id: `approval:${approval.id}`,
       kind: "approval" as const,
       title: "Validation demandée",
@@ -274,22 +286,58 @@ export function RoundTable() {
     setReplyTo(message);
     setReplyFocusRequest({ topicId: activeId, id: ++replyFocusRequestIdRef.current });
   }, [activeId]);
-  const resetTopic = async () => {
-    if (!activeId || !window.confirm(`Vider tous les messages de « ${activeTopic?.title} » ?`)) return;
-    await api.resetTopic(activeId);
-    setMessages([]); setReplyTo(undefined); setHasMoreMessagesBefore(false); setTasks([]); applyTopics(await api.topics());
+  const resetTopic = () => {
+    if (!activeId) return;
+    const topicId = activeId;
+    const topicTitle = activeTopic?.title || "ce sujet";
+    setConfirmation({
+      title: "Vider ce sujet ?",
+      message: `Les messages, tâches et autorisations de « ${topicTitle} » seront supprimés. Le sujet restera disponible.`,
+      confirmLabel: "Vider les messages",
+      confirmIcon: "delete_history",
+      icon: "delete_history",
+      danger: true,
+      onConfirm: async () => {
+        await api.resetTopic(topicId);
+        if (activeIdRef.current !== topicId) return;
+        setMessages([]); setReplyTo(undefined); setHasMoreMessagesBefore(false); setTasks([]); applyTopics(await api.topics());
+      },
+    });
   };
-  const deleteTopic = async () => {
-    if (!activeId || !window.confirm(`Supprimer définitivement « ${activeTopic?.title} » et ses médias ?`)) return;
-    await api.deleteTopic(activeId);
-    const nextTopics = await api.topics();
-    applyTopics(nextTopics); setActiveId(nextTopics[0]?.id); setMessages([]); setReplyTo(undefined); setHasMoreMessagesBefore(false); setTasks([]);
+  const deleteTopic = () => {
+    if (!activeId) return;
+    const topicId = activeId;
+    const topicTitle = activeTopic?.title || "ce sujet";
+    setConfirmation({
+      title: "Supprimer ce sujet ?",
+      message: `« ${topicTitle} », ses messages, ses tâches et ses médias seront supprimés définitivement.`,
+      confirmLabel: "Supprimer le sujet",
+      confirmIcon: "delete_forever",
+      icon: "delete_forever",
+      danger: true,
+      onConfirm: async () => {
+        await api.deleteTopic(topicId);
+        const nextTopics = await api.topics();
+        applyTopics(nextTopics);
+        if (activeIdRef.current !== topicId) return;
+        setActiveId(nextTopics[0]?.id); setMessages([]); setReplyTo(undefined); setHasMoreMessagesBefore(false); setTasks([]);
+      },
+    });
   };
-  const disconnectAgent = async (agentId: string) => {
+  const disconnectAgent = (agentId: string) => {
     const agent = agents.find((candidate) => candidate.id === agentId);
-    if (!window.confirm(`Déconnecter ${agent?.name || agentId} de la table ?`)) return;
-    await api.disconnectAgent(agentId);
-    await refreshAgents();
+    const agentName = agent?.name || agentId;
+    setConfirmation({
+      title: "Déconnecter cet agent ?",
+      message: `${agentName} ne recevra plus les nouveaux messages de la table jusqu’à sa prochaine connexion.`,
+      confirmLabel: "Déconnecter",
+      confirmIcon: "link_off",
+      icon: "link_off",
+      onConfirm: async () => {
+        await api.disconnectAgent(agentId);
+        await refreshAgents();
+      },
+    });
   };
   const createTask = async (input: { title: string; description: string; assignedAgentId?: string }) => {
     if (!activeId) return;
@@ -306,10 +354,47 @@ export function RoundTable() {
     await api.resolveApproval(taskId, approvalId, decision, note);
     await refreshTasks(activeId);
   };
-  const cancelTask = async (taskId: string) => {
-    if (!activeId || !window.confirm("Arrêter cette tâche et demander au worker de se terminer ?")) return;
-    await api.cancelTask(taskId);
+  const cancelTask = (taskId: string) => {
+    if (!activeId) return;
+    const topicId = activeId;
+    setConfirmation({
+      title: "Arrêter cette tâche ?",
+      message: "Le worker recevra une demande d’arrêt. La tâche restera conservée dans ce sujet.",
+      confirmLabel: "Arrêter la tâche",
+      confirmIcon: "stop_circle",
+      icon: "stop_circle",
+      danger: true,
+      onConfirm: async () => {
+        await api.cancelTask(taskId);
+        if (activeIdRef.current === topicId) await refreshTasks(topicId);
+      },
+    });
+  };
+  const archiveTask = async (taskId: string) => {
+    if (!activeId) return;
+    await api.archiveTask(taskId);
     await refreshTasks(activeId);
+  };
+  const unarchiveTask = async (taskId: string) => {
+    if (!activeId) return;
+    await api.unarchiveTask(taskId);
+    await refreshTasks(activeId);
+  };
+  const deleteTask = (taskId: string) => {
+    if (!activeId) return;
+    const topicId = activeId;
+    setConfirmation({
+      title: "Supprimer cette tâche ?",
+      message: "Cette tâche et son historique seront supprimés définitivement. Cette action est irréversible.",
+      confirmLabel: "Supprimer la tâche",
+      confirmIcon: "delete_forever",
+      icon: "delete_forever",
+      danger: true,
+      onConfirm: async () => {
+        await api.deleteTask(taskId);
+        if (activeIdRef.current === topicId) await refreshTasks(topicId);
+      },
+    });
   };
   const resolveAuthorization = async (authorizationId: string, decision: "approved" | "rejected") => {
     if (!activeId) return;
@@ -350,11 +435,25 @@ export function RoundTable() {
       onTaskInstruction={addTaskInstruction}
       onResolveApproval={resolveApproval}
       onCancelTask={cancelTask}
+      onArchiveTask={archiveTask}
+      onUnarchiveTask={unarchiveTask}
+      onDeleteTask={deleteTask}
       onClose={() => setRightPanelCollapsed(true)}
       onMobileClose={closeMobilePanel}
     />
     {mobilePanel && <button className="round-table__mobile-backdrop" onClick={closeMobilePanel} aria-label="Fermer le panneau" />}
     <NewTopicDialog open={newTopicOpen} onClose={() => setNewTopicOpen(false)} onCreate={createTopic} />
     <SettingsDialog open={settingsOpen} onClose={() => setSettingsOpen(false)} notificationPermission={notifications.permission} notificationsEnabled={notifications.enabled} onToggleNotifications={() => void notifications.toggle()} onSync={syncAll} />
+    <ConfirmDialog
+      open={Boolean(confirmation)}
+      title={confirmation?.title || "Confirmation"}
+      message={confirmation?.message || ""}
+      confirmLabel={confirmation?.confirmLabel || "Confirmer"}
+      confirmIcon={confirmation?.confirmIcon || "check"}
+      icon={confirmation?.icon || "help"}
+      danger={confirmation?.danger}
+      onClose={() => setConfirmation(undefined)}
+      onConfirm={confirmation?.onConfirm || (async () => undefined)}
+    />
   </section>;
 }
