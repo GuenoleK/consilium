@@ -31,6 +31,8 @@
 }
 
 .task-queue__section[open] > .task-queue__section-summary > span .icon { transform: rotate(90deg); }
+.task-queue__section--completed > .task-queue__section-summary > span { color: var(--cs-color-green); }
+.task-queue__section--archived > .task-queue__section-summary > span { color: var(--cs-color-text-muted); }
 
 .task-item {
   padding: 11px; border: 1px solid var(--cs-color-border); border-radius: 12px; background: var(--cs-color-surface);

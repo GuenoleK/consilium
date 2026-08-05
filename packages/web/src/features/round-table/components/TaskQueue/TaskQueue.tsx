@@ -4,6 +4,8 @@ import { Icon } from "../../../../shared/components/Icon/Icon";
 import { TaskItem } from "./TaskItem";
 import "./TaskQueue.scss";
 
+const terminalTaskStatuses = new Set<ConsiliumTask["status"]>(["completed", "failed", "cancelled"]);
+
 interface TaskQueueProps {
   tasks: ConsiliumTask[];
   agents: Agent[];
@@ -22,8 +24,10 @@ export function TaskQueue({ tasks, agents, onCreate, onInstruction, onResolve, o
   const [description, setDescription] = useState("");
   const [assignedAgentId, setAssignedAgentId] = useState("");
   const [activeOpen, setActiveOpen] = useState(true);
+  const [completedOpen, setCompletedOpen] = useState(false);
   const [archivedOpen, setArchivedOpen] = useState(false);
-  const activeTasks = tasks.filter((task) => !task.archivedAt);
+  const activeTasks = tasks.filter((task) => !task.archivedAt && !terminalTaskStatuses.has(task.status));
+  const completedTasks = tasks.filter((task) => !task.archivedAt && terminalTaskStatuses.has(task.status));
   const archivedTasks = tasks.filter((task) => Boolean(task.archivedAt));
   const pendingCount = activeTasks.filter((task) => task.status === "awaiting_approval" || task.status === "waiting_for_input").length;
   const renderTasks = (sectionTasks: ConsiliumTask[], emptyMessage: string) => sectionTasks.length ? (
@@ -53,14 +57,21 @@ export function TaskQueue({ tasks, agents, onCreate, onInstruction, onResolve, o
       </select>
       <button type="submit" disabled={!title.trim()}><Icon name="play_arrow" />Créer la tâche</button>
     </form>}
-    <details className="task-queue__section" open={activeOpen} onToggle={(event) => setActiveOpen(event.currentTarget.open)}>
+    <details className="task-queue__section task-queue__section--active" open={activeOpen} onToggle={(event) => setActiveOpen(event.currentTarget.open)}>
       <summary className="task-queue__section-summary">
         <span><Icon name="chevron_right" />Tâches actives</span>
         <strong>{activeTasks.length}</strong>
       </summary>
       {renderTasks(activeTasks, "Aucune tâche active. Créez-en une pour déléguer un travail à un agent.")}
     </details>
-    <details className="task-queue__section" open={archivedOpen} onToggle={(event) => setArchivedOpen(event.currentTarget.open)}>
+    <details className="task-queue__section task-queue__section--completed" open={completedOpen} onToggle={(event) => setCompletedOpen(event.currentTarget.open)}>
+      <summary className="task-queue__section-summary">
+        <span><Icon name="chevron_right" />Tâches terminées</span>
+        <strong>{completedTasks.length}</strong>
+      </summary>
+      {renderTasks(completedTasks, "Aucune tâche terminée.")}
+    </details>
+    <details className="task-queue__section task-queue__section--archived" open={archivedOpen} onToggle={(event) => setArchivedOpen(event.currentTarget.open)}>
       <summary className="task-queue__section-summary">
         <span><Icon name="chevron_right" />Tâches archivées</span>
         <strong>{archivedTasks.length}</strong>
