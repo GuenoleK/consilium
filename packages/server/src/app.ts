@@ -27,6 +27,15 @@ export const createApp = (store = new ConsiliumStore()) => {
     const topic = await store.getTopic(context.req.param("id"));
     return topic ? context.json(topic) : context.json({ error: "Topic not found" }, 404);
   });
+  app.post("/api/topics/:id/participants", async (context) => {
+    const input = z.object({ agentId: agentIdSchema }).parse(await context.req.json());
+    try {
+      return context.json(await store.addParticipant(context.req.param("id"), input.agentId));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return context.json({ error: message }, message === "Topic not found" ? 404 : 409);
+    }
+  });
   app.get("/api/topics/:id/messages", async (context) => {
     const before = context.req.query("before");
     const limit = context.req.query("limit");
@@ -57,8 +66,12 @@ export const createApp = (store = new ConsiliumStore()) => {
       authorKind: replyToMessage.authorKind,
       body: replyToMessage.body,
     };
-    const message = await store.addMessage({ ...messageInput, attachments: [], replyTo, topicId: context.req.param("id") });
-    return context.json(attachmentIds.length ? await store.attachToMessage(message.id, attachmentIds) : message, 201);
+    try {
+      const message = await store.addMessage({ ...messageInput, attachments: [], replyTo, topicId: context.req.param("id") });
+      return context.json(attachmentIds.length ? await store.attachToMessage(message.id, attachmentIds) : message, 201);
+    } catch (error) {
+      return context.json({ error: error instanceof Error ? error.message : String(error) }, 409);
+    }
   });
   app.post("/api/topics/:id/attachments", async (context) => {
     const body = await context.req.parseBody();
@@ -129,6 +142,16 @@ export const createApp = (store = new ConsiliumStore()) => {
     const input = z.object({ sessionId: z.string().trim().min(1).max(120).optional() }).parse(body);
     const agent = await store.disconnectAgent(context.req.param("id"), input.sessionId);
     return agent ? context.json(agent) : context.json({ error: "Agent not found" }, 404);
+  });
+  app.delete("/api/agents/:id", async (context) => {
+    try {
+      const parsedId = agentIdSchema.safeParse(context.req.param("id"));
+      if (!parsedId.success) return context.json({ error: "Invalid agent id" }, 400);
+      const agent = await store.deleteAgent(parsedId.data);
+      return agent ? context.body(null, 204) : context.json({ error: "Agent not found" }, 404);
+    } catch (error) {
+      return context.json({ error: error instanceof Error ? error.message : String(error) }, 409);
+    }
   });
   app.get("/api/tasks", async (context) => context.json(await store.listTasks({
     topicId: context.req.query("topicId"),

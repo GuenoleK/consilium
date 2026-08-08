@@ -21,4 +21,5 @@
   img { display: block; max-width: 100%; max-height: 420px; margin: 10px 0; border-radius: 10px; object-fit: contain; }
   input[type="checkbox"] { margin-right: 5px; accent-color: var(--cs-color-accent); }
   &__mention { padding: 1px 4px; border-radius: 4px; background: var(--cs-color-accent-soft); color: var(--cs-color-accent-strong); }
+  &__topic-reference { padding: 1px 4px; border-radius: 4px; background: var(--cs-color-blue-soft, var(--cs-color-accent-soft)); color: var(--cs-color-accent-strong); font-weight: 600; }
 }

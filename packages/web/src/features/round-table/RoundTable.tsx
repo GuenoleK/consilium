@@ -80,7 +80,9 @@ const sameTopics = (current: Topic[], next: Topic[]) =>
     const candidate = next[index];
     return candidate?.id === topic.id
       && candidate.updatedAt === topic.updatedAt
-      && candidate.messageCount === topic.messageCount;
+      && candidate.messageCount === topic.messageCount
+      && candidate.mentionKey === topic.mentionKey
+      && candidate.participantIds.join("\u0000") === topic.participantIds.join("\u0000");
   });
 
 export function RoundTable() {
@@ -107,6 +109,10 @@ export function RoundTable() {
   const messagesRef = useRef<Message[]>([]);
   const replyFocusRequestIdRef = useRef(0);
   const activeTopic = topics.find((topic) => topic.id === activeId);
+  const activeTopicAgents = useMemo(() => {
+    const participantIds = new Set((activeTopic?.participantIds || []).map((participantId) => participantId.toLowerCase()));
+    return agents.filter((agent) => participantIds.has(agent.id.toLowerCase()));
+  }, [activeTopic, agents]);
   const typingAgents = useMemo(() => agents.filter((agent) =>
     agent.status === "working" && agent.activeTopicId === activeId,
   ), [activeId, agents]);
@@ -339,6 +345,26 @@ export function RoundTable() {
       },
     });
   };
+  const deleteAgent = (agentId: string) => {
+    const agent = agents.find((candidate) => candidate.id === agentId);
+    if (!agent) return;
+    setConfirmation({
+      title: "Supprimer cet agent ?",
+      message: `${agent.name} sera retiré de la liste des agents et de toutes ses rooms. Ses messages historiques seront conservés.`,
+      confirmLabel: "Supprimer l’agent",
+      confirmIcon: "delete_forever",
+      icon: "delete_forever",
+      danger: true,
+      onConfirm: async () => {
+        await api.deleteAgent(agentId);
+        await Promise.allSettled([refreshAgents(), refreshTopics()]);
+      },
+    });
+  };
+  const addParticipant = async (topicId: string, agentId: string) => {
+    const topic = await api.addParticipant(topicId, agentId);
+    setTopics((current) => current.map((candidate) => candidate.id === topic.id ? topic : candidate));
+  };
   const createTask = async (input: { title: string; description: string; assignedAgentId?: string }) => {
     if (!activeId) return;
     await api.createTask({ topicId: activeId, ...input });
@@ -403,6 +429,10 @@ export function RoundTable() {
   };
 
   const closeMobilePanel = () => setMobilePanel(undefined);
+  const openTopic = (topicId: string) => {
+    setActiveId(topicId);
+    closeMobilePanel();
+  };
   const roundTableClassName = [
     "round-table",
     mobilePanel ? `round-table--${mobilePanel}-open` : "",
@@ -418,18 +448,21 @@ export function RoundTable() {
         <div className="round-table__actions"><button className="round-table__panel-toggle round-table__panel-toggle--right" onClick={() => setRightPanelCollapsed((collapsed) => !collapsed)} aria-label={rightPanelCollapsed ? "Afficher les participants" : "Rétracter les participants"} aria-expanded={!rightPanelCollapsed} title={rightPanelCollapsed ? "Afficher les participants" : "Rétracter les participants"}><Icon name={rightPanelCollapsed ? "chevron_left" : "chevron_right"} /></button><button className="round-table__settings" onClick={() => setSettingsOpen(true)} aria-label="Ouvrir les paramètres" title="Paramètres"><Icon name="settings" /></button><ConversationActions disabled={!activeId} onReset={() => void resetTopic()} onDelete={() => void deleteTopic()} /></div>
         <button className="round-table__mobile-participants" onClick={() => setMobilePanel("agents")} aria-label="Afficher les participants"><Icon name="group" /></button>
       </header>
-      {error ? <div className="round-table__error"><Icon name="cloud_off" />{error}</div> : <MessageList messages={messages} typingAgents={typingAgents} hasMoreBefore={hasMoreMessagesBefore} loadingOlder={loadingOlderMessages} onLoadOlder={loadOlderMessages} onReply={replyToMessage} />}
+      {error ? <div className="round-table__error"><Icon name="cloud_off" />{error}</div> : <MessageList messages={messages} typingAgents={typingAgents} hasMoreBefore={hasMoreMessagesBefore} loadingOlder={loadingOlderMessages} onLoadOlder={loadOlderMessages} onReply={replyToMessage} onOpenTopic={openTopic} />}
       <div className="round-table__composer-area">
         <AuthorizationBubble requests={authorizations} onResolve={resolveAuthorization} />
-        <MessageComposer key={activeId} topicId={activeId} agents={agents} disabled={!activeId || Boolean(error)} replyTo={replyTo} replyFocusRequest={replyFocusRequest?.topicId === activeId ? replyFocusRequest?.id : undefined} onCancelReply={() => setReplyTo(undefined)} onSend={sendMessage} />
+        <MessageComposer key={activeId} topicId={activeId} agents={activeTopicAgents} topics={topics} disabled={!activeId || Boolean(error)} replyTo={replyTo} replyFocusRequest={replyFocusRequest?.topicId === activeId ? replyFocusRequest?.id : undefined} onCancelReply={() => setReplyTo(undefined)} onSend={sendMessage} />
       </div>
     </section>
     {!rightPanelCollapsed && <button className="round-table__tablet-backdrop" onClick={() => setRightPanelCollapsed(true)} aria-label="Fermer le volet des participants" />}
     <AgentPanel
       agents={agents}
+      topics={topics}
       activeTopicId={activeId}
       tasks={tasks}
       onDisconnect={(id) => void disconnectAgent(id)}
+      onDeleteAgent={(id) => void deleteAgent(id)}
+      onAddParticipant={addParticipant}
       onRefreshAgents={refreshAgents}
       onCreateTask={createTask}
       onTaskInstruction={addTaskInstruction}

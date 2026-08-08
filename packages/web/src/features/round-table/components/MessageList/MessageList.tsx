@@ -74,13 +74,14 @@ const copyRichText = async (element: HTMLElement, fallback: string) => {
 
 type CopyFeedback = { messageId: string; status: "copied" | "failed" };
 
-export const MessageList = memo(function MessageList({ messages, typingAgents, hasMoreBefore, loadingOlder, onLoadOlder, onReply }: {
+export const MessageList = memo(function MessageList({ messages, typingAgents, hasMoreBefore, loadingOlder, onLoadOlder, onReply, onOpenTopic }: {
   messages: Message[];
   typingAgents: Agent[];
   hasMoreBefore: boolean;
   loadingOlder: boolean;
   onLoadOlder: () => void;
   onReply: (message: Message) => void;
+  onOpenTopic: (topicId: string) => void;
 }) {
   const listRef = useRef<HTMLDivElement>(null);
   const shouldFollowRef = useRef(true);
@@ -169,7 +170,7 @@ export const MessageList = memo(function MessageList({ messages, typingAgents, h
             else bodyRefs.current.delete(message.id);
           }}
           className="message-list__body"
-        ><RichText>{message.body}</RichText></div>}
+        ><RichText topicReferences={message.topicMentions} onTopicReference={onOpenTopic}>{message.body}</RichText></div>}
         <div className="message-list__actions">
           <button className="message-list__action message-list__reply-action" type="button" onClick={() => onReply(message)} aria-label={`Répondre au message de ${message.authorName}`}><Icon name="reply" />Répondre</button>
           {message.body && <button

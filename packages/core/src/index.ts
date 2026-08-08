@@ -17,8 +17,15 @@ export const attachmentSchema = z.object({
   createdAt: z.string(),
 });
 
+export const topicReferenceSchema = z.object({
+  topicId: z.string(),
+  mentionKey: z.string(),
+  title: z.string(),
+});
+
 export const topicSchema = z.object({
   id: z.string(),
+  mentionKey: z.string(),
   title: z.string(),
   description: z.string(),
   createdAt: z.string(),
@@ -43,6 +50,7 @@ export const messageSchema = z.object({
   authorKind: participantKindSchema,
   body: z.string(),
   mentions: z.array(z.string()),
+  topicMentions: z.array(topicReferenceSchema),
   attachments: z.array(attachmentSchema),
   replyTo: messageReferenceSchema.optional(),
   createdAt: z.string(),
@@ -120,6 +128,7 @@ export const taskSchema = z.object({
 
 export type Topic = z.infer<typeof topicSchema>;
 export type Message = z.infer<typeof messageSchema>;
+export type TopicReference = z.infer<typeof topicReferenceSchema>;
 export type Agent = z.infer<typeof agentSchema>;
 export type Attachment = z.infer<typeof attachmentSchema>;
 export type ConsiliumTask = z.infer<typeof taskSchema>;

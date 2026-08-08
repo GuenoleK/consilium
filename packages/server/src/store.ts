@@ -6,11 +6,36 @@ import type { Agent, ApprovalRequest, Attachment, AuthorizationRequest, Consiliu
 
 const now = () => new Date().toISOString();
 const activeAgentStatuses = new Set<Agent["status"]>(["online", "listening", "working"]);
+const reservedAgentIds = new Set(["human", "system", "vous", "tous", "all"]);
 // An agent doing real local work (reading files, running tests) between Consilium tool calls can
 // easily go 20-40s without touching this server at all; a short TTL here reads that normal work
 // gap as "inactive" even though the agent is actively engaged with the task. Generous enough to
 // tolerate realistic work stretches, still short enough to catch a genuine disconnect promptly.
 const presenceStaleAfterMs = 90_000;
+
+const normalizeTopicMentionKey = (title: string) => title
+  .normalize("NFKD")
+  .replace(/[\u0300-\u036f]/g, "")
+  .toLowerCase()
+  .replace(/[^\p{L}\p{N}]+/gu, "-")
+  .replace(/^-+|-+$/g, "")
+  .slice(0, 48)
+  .replace(/-+$/g, "");
+
+const uniqueTopicMentionKey = (title: string, usedKeys: Set<string>, fallbackId?: string) => {
+  const base = normalizeTopicMentionKey(title) || `conversation-${fallbackId?.slice(0, 8) || "topic"}`;
+  let key = base;
+  let suffix = 2;
+  while (usedKeys.has(key)) {
+    const suffixText = `-${suffix++}`;
+    key = `${base.slice(0, Math.max(1, 48 - suffixText.length))}${suffixText}`;
+  }
+  usedKeys.add(key);
+  return key;
+};
+
+const agentMentionPattern = /(?<![\p{L}\p{N}._-])@([\p{L}\p{N}_-]+)/gu;
+const topicMentionPattern = /(?<![\p{L}\p{N}._-])#([\p{L}\p{N}_-]+)/gu;
 
 const initialSnapshot = (): ConsiliumSnapshot => {
   const createdAt = now();
@@ -18,6 +43,7 @@ const initialSnapshot = (): ConsiliumSnapshot => {
   return {
     topics: [{
       id: topicId,
+      mentionKey: "bienvenue-a-la-table-ronde",
       title: "Bienvenue à la table ronde",
       description: "Un espace commun pour cadrer le projet et coordonner les agents.",
       createdAt,
@@ -33,6 +59,7 @@ const initialSnapshot = (): ConsiliumSnapshot => {
       authorKind: "system",
       body: "La table est ouverte. Connectez un agent puis mentionnez-le pour commencer.",
       mentions: [],
+      topicMentions: [],
       attachments: [],
       createdAt,
     }],
@@ -61,14 +88,29 @@ export class ConsiliumStore {
       this.snapshot.attachments ??= [];
       this.snapshot.tasks ??= [];
       this.snapshot.authorizations ??= [];
-      this.snapshot.messages = this.snapshot.messages.map((message) => ({ ...message, attachments: message.attachments ?? [] }));
+      let snapshotChanged = false;
+      const usedTopicMentionKeys = new Set<string>();
+      this.snapshot.topics = this.snapshot.topics.map((topic) => {
+        const existingKey = typeof topic.mentionKey === "string" ? topic.mentionKey.trim().toLowerCase() : "";
+        const mentionKey = existingKey && !usedTopicMentionKeys.has(existingKey)
+          ? (usedTopicMentionKeys.add(existingKey), existingKey)
+          : uniqueTopicMentionKey(topic.title, usedTopicMentionKeys, topic.id);
+        if (mentionKey !== existingKey) snapshotChanged = true;
+        return mentionKey === topic.mentionKey ? topic : { ...topic, mentionKey };
+      });
+      this.snapshot.messages = this.snapshot.messages.map((message) => {
+        const topicMentions = message.topicMentions ?? [];
+        if (message.attachments === undefined || message.topicMentions === undefined) snapshotChanged = true;
+        return { ...message, attachments: message.attachments ?? [], topicMentions };
+      });
       const agentCountBeforeMigration = this.snapshot.agents.length;
       this.snapshot.agents = this.snapshot.agents.filter((agent) => !(
         agent.status === "away"
         && ((agent.id === "codex" && agent.name === "Codex" && agent.model === "OpenAI")
           || (agent.id === "claude" && agent.name === "Claude" && agent.model === "Anthropic"))
       ));
-      if (this.snapshot.agents.length !== agentCountBeforeMigration) await this.persist();
+      if (this.snapshot.agents.length !== agentCountBeforeMigration) snapshotChanged = true;
+      if (snapshotChanged) await this.persist();
     } catch {
       await this.persist();
     }
@@ -92,10 +134,33 @@ export class ConsiliumStore {
     return this.snapshot.topics.find((topic) => topic.id === id);
   }
 
+  async addParticipant(topicId: string, agentId: string) {
+    await this.ensureLoaded();
+    const topic = this.snapshot.topics.find((candidate) => candidate.id === topicId);
+    if (!topic) throw new Error("Topic not found");
+    const normalizedAgentId = agentId.trim().toLowerCase();
+    if (!this.snapshot.agents.some((agent) => agent.id === normalizedAgentId)) throw new Error("Agent not found");
+    if (topic.participantIds.some((participantId) => participantId.toLowerCase() === normalizedAgentId)) return topic;
+    topic.participantIds = [...topic.participantIds, normalizedAgentId];
+    topic.updatedAt = now();
+    await this.persist();
+    return topic;
+  }
+
   async createTopic(input: Pick<Topic, "title" | "description">) {
     await this.ensureLoaded();
     const createdAt = now();
-    const topic: Topic = { id: randomUUID(), ...input, createdAt, updatedAt: createdAt, messageCount: 0, participantIds: [] };
+    const id = randomUUID();
+    const usedTopicMentionKeys = new Set(this.snapshot.topics.map((topic) => topic.mentionKey.toLowerCase()));
+    const topic: Topic = {
+      id,
+      mentionKey: uniqueTopicMentionKey(input.title, usedTopicMentionKeys, id),
+      ...input,
+      createdAt,
+      updatedAt: createdAt,
+      messageCount: 0,
+      participantIds: [],
+    };
     this.snapshot.topics.push(topic);
     await this.persist();
     return topic;
@@ -110,7 +175,6 @@ export class ConsiliumStore {
     this.snapshot.tasks = this.snapshot.tasks.filter((task) => task.topicId !== id);
     this.snapshot.authorizations = this.snapshot.authorizations.filter((authorization) => authorization.topicId !== id);
     topic.messageCount = 0;
-    topic.participantIds = [];
     topic.updatedAt = now();
     await this.persist();
     return topic;
@@ -122,7 +186,11 @@ export class ConsiliumStore {
     if (!exists) return false;
     await this.removeTopicAttachments(id);
     this.snapshot.topics = this.snapshot.topics.filter((topic) => topic.id !== id);
-    this.snapshot.messages = this.snapshot.messages.filter((message) => message.topicId !== id);
+    this.snapshot.messages = this.snapshot.messages
+      .filter((message) => message.topicId !== id)
+      .map((message) => message.topicMentions.some((reference) => reference.topicId === id)
+        ? { ...message, topicMentions: message.topicMentions.filter((reference) => reference.topicId !== id) }
+        : message);
     this.snapshot.tasks = this.snapshot.tasks.filter((task) => task.topicId !== id);
     this.snapshot.authorizations = this.snapshot.authorizations.filter((authorization) => authorization.topicId !== id);
     await this.persist();
@@ -147,10 +215,22 @@ export class ConsiliumStore {
     };
   }
 
-  async addMessage(input: Omit<Message, "id" | "createdAt" | "mentions">) {
+  async addMessage(input: Omit<Message, "id" | "createdAt" | "mentions" | "topicMentions">) {
     await this.ensureLoaded();
-    const mentions = [...input.body.matchAll(/@([\p{L}\p{N}_-]+)/gu)].map((match) => match[1].toLowerCase());
+    const topic = this.snapshot.topics.find((candidate) => candidate.id === input.topicId);
+    if (!topic) throw new Error("Topic not found");
+    const mentions = [...input.body.matchAll(agentMentionPattern)].map((match) => match[1].toLowerCase());
+    const reservedMentions = new Set(["vous", "tous", "all"]);
+    const participantIds = new Set(topic.participantIds.map((participantId) => participantId.toLowerCase()));
+    participantIds.add(input.authorId.toLowerCase());
+    const outsideParticipants = [...new Set(mentions.filter((mention) => !reservedMentions.has(mention) && !participantIds.has(mention)))];
+    if (outsideParticipants.length) throw new Error(`Agent(s) not participating in this topic: ${outsideParticipants.join(", ")}`);
     if (input.replyTo?.authorKind === "agent") mentions.push(input.replyTo.authorId.toLowerCase());
+    const topicMentions = [...new Set([...input.body.matchAll(topicMentionPattern)].map((match) => match[1].toLowerCase()))]
+      .flatMap((mentionKey) => {
+        const referencedTopic = this.snapshot.topics.find((candidate) => candidate.mentionKey.toLowerCase() === mentionKey);
+        return referencedTopic ? [{ topicId: referencedTopic.id, mentionKey: referencedTopic.mentionKey, title: referencedTopic.title }] : [];
+      });
     const latestCreatedAt = this.snapshot.messages.at(-1)?.createdAt;
     const currentTimestamp = now();
     // Cursors use a timestamp comparison. Make message timestamps strictly increasing so two
@@ -158,9 +238,7 @@ export class ConsiliumStore {
     const createdAt = latestCreatedAt && latestCreatedAt >= currentTimestamp
       ? new Date(new Date(latestCreatedAt).getTime() + 1).toISOString()
       : currentTimestamp;
-    const message: Message = { ...input, id: randomUUID(), mentions: [...new Set(mentions)], createdAt };
-    const topic = this.snapshot.topics.find((candidate) => candidate.id === input.topicId);
-    if (!topic) throw new Error("Topic not found");
+    const message: Message = { ...input, id: randomUUID(), mentions: [...new Set(mentions)], topicMentions, createdAt };
     this.snapshot.messages.push(message);
     topic.updatedAt = message.createdAt;
     topic.messageCount += 1;
@@ -260,6 +338,26 @@ export class ConsiliumStore {
     agent.activeTopicId = undefined;
     agent.activeTopicTitle = undefined;
     agent.lastSeenAt = now();
+    await this.persist();
+    return agent;
+  }
+
+  async deleteAgent(id: string) {
+    await this.ensureLoaded();
+    const normalizedAgentId = id.trim().toLowerCase();
+    if (reservedAgentIds.has(normalizedAgentId)) throw new Error("Reserved agents cannot be deleted");
+    const agent = this.snapshot.agents.find((candidate) => candidate.id === normalizedAgentId);
+    if (!agent) return undefined;
+    if (agent.status !== "offline") throw new Error("Only disconnected agents can be deleted");
+
+    const updatedAt = now();
+    this.snapshot.agents = this.snapshot.agents.filter((candidate) => candidate.id !== normalizedAgentId);
+    this.snapshot.topics = this.snapshot.topics.map((topic) => {
+      const participantIds = topic.participantIds.filter((participantId) => participantId.toLowerCase() !== normalizedAgentId);
+      return participantIds.length === topic.participantIds.length
+        ? topic
+        : { ...topic, participantIds, updatedAt };
+    });
     await this.persist();
     return agent;
   }

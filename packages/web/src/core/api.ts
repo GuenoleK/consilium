@@ -21,6 +21,9 @@ export const api = {
   messagesSince: (topicId: string, since: string) => request<Message[]>(`/topics/${topicId}/messages?since=${encodeURIComponent(since)}`),
   agents: () => request<Agent[]>("/agents"),
   createTopic: (title: string, description = "") => request<Topic>("/topics", { method: "POST", body: JSON.stringify({ title, description }) }),
+  addParticipant: (topicId: string, agentId: string) => request<Topic>(`/topics/${topicId}/participants`, {
+    method: "POST", body: JSON.stringify({ agentId }),
+  }),
   resetTopic: (topicId: string) => request<Topic>(`/topics/${topicId}/reset`, { method: "POST" }),
   deleteTopic: (topicId: string) => request<void>(`/topics/${topicId}`, { method: "DELETE" }),
   sendMessage: (topicId: string, body: string, attachmentIds: string[] = [], replyToId?: string) => request<Message>(`/topics/${topicId}/messages`, {
@@ -40,6 +43,7 @@ export const api = {
       method: "POST", body: JSON.stringify({ decision, resolvedBy: "human", decisionNote }),
     }),
   disconnectAgent: (agentId: string) => request<Agent>(`/agents/${agentId}/disconnect`, { method: "POST" }),
+  deleteAgent: (agentId: string) => request<void>(`/agents/${agentId}`, { method: "DELETE" }),
   tasks: (topicId: string) => request<ConsiliumTask[]>(`/tasks?topicId=${encodeURIComponent(topicId)}`),
   createTask: (input: { topicId: string; title: string; description: string; assignedAgentId?: string }) =>
     request<ConsiliumTask>("/tasks", { method: "POST", body: JSON.stringify({ ...input, requestedBy: "human" }) }),

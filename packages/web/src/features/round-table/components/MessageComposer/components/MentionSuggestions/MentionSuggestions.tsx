@@ -10,8 +10,8 @@ interface MentionSuggestionsProps {
 const initials = (name: string) => name.slice(0, 2).toUpperCase();
 
 export function MentionSuggestions({ agents, activeIndex, onSelect }: MentionSuggestionsProps) {
-  return <div id="mention-suggestions" className="mention-suggestions" role="listbox" aria-label="Agents connectés">
-    <span className="mention-suggestions__label">Mentionner un agent</span>
+  return <div id="mention-suggestions" className="mention-suggestions" role="listbox" aria-label="Agents participants">
+    <span className="mention-suggestions__label">Mentionner un agent de la room</span>
     {agents.map((agent, index) => <button
       id={`mention-option-${agent.id}`}
       className={`mention-suggestions__item${index === activeIndex ? " mention-suggestions__item--active" : ""}`}

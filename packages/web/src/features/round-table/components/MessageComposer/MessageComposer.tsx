@@ -1,11 +1,12 @@
 import { memo, useEffect, useRef, useState } from "react";
-import type { Agent, Message } from "@consilium/core";
+import type { Agent, Message, Topic } from "@consilium/core";
 import { Icon } from "../../../../shared/components/Icon/Icon";
 import { AttachmentList } from "./components/AttachmentList/AttachmentList";
 import { MentionSuggestions } from "./components/MentionSuggestions/MentionSuggestions";
+import { ConversationSuggestions } from "./components/ConversationSuggestions/ConversationSuggestions";
 import "./MessageComposer.scss";
 
-interface MentionContext { start: number; end: number; query: string; }
+interface MentionContext { kind: "agent" | "topic"; start: number; end: number; query: string; }
 const connectedStatuses = new Set<Agent["status"]>(["online", "listening", "working"]);
 const maximumFileSize = 25 * 1024 * 1024;
 const draftDatabaseName = "consilium-composer-drafts";
@@ -58,9 +59,10 @@ function queueDraftWrite(topicId: string, draft: ComposerDraft, remove = false) 
   return nextWrite;
 }
 
-export const MessageComposer = memo(function MessageComposer({ topicId, agents, disabled, replyTo, replyFocusRequest, onCancelReply, onSend }: {
+export const MessageComposer = memo(function MessageComposer({ topicId, agents, topics, disabled, replyTo, replyFocusRequest, onCancelReply, onSend }: {
   topicId?: string;
   agents: Agent[];
+  topics: Topic[];
   disabled?: boolean;
   replyTo?: Message;
   replyFocusRequest?: number;
@@ -85,6 +87,9 @@ export const MessageComposer = memo(function MessageComposer({ topicId, agents, 
   const mentionAgents = agents
     .filter((agent) => connectedStatuses.has(agent.status))
     .filter((agent) => !mentionContext?.query || agent.id.includes(mentionContext.query) || agent.name.toLowerCase().includes(mentionContext.query))
+    .slice(0, 8);
+  const conversationSuggestions = topics
+    .filter((topic) => !mentionContext?.query || topic.mentionKey.includes(mentionContext.query) || topic.title.toLowerCase().includes(mentionContext.query))
     .slice(0, 8);
 
   useEffect(() => { latestDraftRef.current = { body, files }; }, [body, files]);
@@ -147,8 +152,8 @@ export const MessageComposer = memo(function MessageComposer({ topicId, agents, 
     addFiles(pastedImages);
   };
   const updateMentionContext = (value: string, cursor: number) => {
-    const match = value.slice(0, cursor).match(/(?:^|\s)@([\p{L}\p{N}_-]*)$/u);
-    setMentionContext(match ? { start: cursor - match[1].length - 1, end: cursor, query: match[1].toLowerCase() } : undefined);
+    const match = value.slice(0, cursor).match(/(?:^|\s)([@#])([\p{L}\p{N}_-]*)$/u);
+    setMentionContext(match ? { kind: match[1] === "@" ? "agent" : "topic", start: cursor - match[2].length - 1, end: cursor, query: match[2].toLowerCase() } : undefined);
     setActiveMentionIndex(0);
   };
   const selectMention = (agent: Agent) => {
@@ -163,6 +168,22 @@ export const MessageComposer = memo(function MessageComposer({ topicId, agents, 
       textareaRef.current?.setSelectionRange(cursor, cursor);
     });
   };
+  const selectTopic = (topic: Topic) => {
+    if (!mentionContext) return;
+    const nextBody = `${body.slice(0, mentionContext.start)}#${topic.mentionKey} ${body.slice(mentionContext.end)}`;
+    const cursor = mentionContext.start + topic.mentionKey.length + 2;
+    markLocalChange();
+    setBody(nextBody);
+    setMentionContext(undefined);
+    requestAnimationFrame(() => {
+      textareaRef.current?.focus();
+      textareaRef.current?.setSelectionRange(cursor, cursor);
+    });
+  };
+  const activeSuggestions = mentionContext?.kind === "topic" ? conversationSuggestions : mentionAgents;
+  const activeSuggestionId = mentionContext?.kind === "topic"
+    ? conversationSuggestions[activeMentionIndex]?.mentionKey
+    : mentionAgents[activeMentionIndex]?.id;
   const submit = async () => {
     if (isSubmittingRef.current || isSending || (!body.trim() && !files.length)) return;
     isSubmittingRef.current = true;
@@ -223,14 +244,17 @@ export const MessageComposer = memo(function MessageComposer({ topicId, agents, 
         onClick={(event) => updateMentionContext(event.currentTarget.value, event.currentTarget.selectionStart)}
         onPaste={handlePaste}
         onKeyDown={(event) => {
-          if (mentionContext && mentionAgents.length) {
+          if (mentionContext && activeSuggestions.length) {
             if (event.key === "ArrowDown" || event.key === "ArrowUp") {
               event.preventDefault();
-              setActiveMentionIndex((current) => (current + (event.key === "ArrowDown" ? 1 : mentionAgents.length - 1)) % mentionAgents.length);
+              setActiveMentionIndex((current) => (current + (event.key === "ArrowDown" ? 1 : activeSuggestions.length - 1)) % activeSuggestions.length);
               return;
             }
             if (event.key === "Enter" || event.key === "Tab") {
-              event.preventDefault(); selectMention(mentionAgents[activeMentionIndex]); return;
+              event.preventDefault();
+              if (mentionContext.kind === "topic") selectTopic(conversationSuggestions[activeMentionIndex]);
+              else selectMention(mentionAgents[activeMentionIndex]);
+              return;
             }
             if (event.key === "Escape") { event.preventDefault(); setMentionContext(undefined); return; }
           }
@@ -240,13 +264,14 @@ export const MessageComposer = memo(function MessageComposer({ topicId, agents, 
             void submit();
           }
         }}
-        placeholder="Écrivez un message… Tapez @ pour mentionner un agent"
+        placeholder="Écrivez un message… Tapez @ pour un agent ou # pour une conversation"
         aria-label="Votre message"
         aria-autocomplete="list"
-        aria-controls={mentionContext && mentionAgents.length ? "mention-suggestions" : undefined}
-        aria-activedescendant={mentionContext && mentionAgents.length ? `mention-option-${mentionAgents[activeMentionIndex]?.id}` : undefined}
+        aria-controls={mentionContext && activeSuggestions.length ? (mentionContext.kind === "topic" ? "conversation-suggestions" : "mention-suggestions") : undefined}
+        aria-activedescendant={mentionContext && activeSuggestions.length ? (mentionContext.kind === "topic" ? `conversation-option-${activeSuggestionId}` : `mention-option-${activeSuggestionId}`) : undefined}
       />
-      {mentionContext && mentionAgents.length > 0 && <MentionSuggestions agents={mentionAgents} activeIndex={activeMentionIndex} onSelect={selectMention} />}
+      {mentionContext?.kind === "agent" && mentionAgents.length > 0 && <MentionSuggestions agents={mentionAgents} activeIndex={activeMentionIndex} onSelect={selectMention} />}
+      {mentionContext?.kind === "topic" && conversationSuggestions.length > 0 && <ConversationSuggestions topics={conversationSuggestions} activeIndex={activeMentionIndex} onSelect={selectTopic} />}
       <input ref={inputRef} className="message-composer__file-input" type="file" multiple accept="image/*,video/*,audio/*,.pdf,.txt,.md,.json" onChange={(event) => { addFiles(Array.from(event.target.files || [])); event.target.value = ""; }} />
       {isDraggingFiles && <div className="message-composer__drop-hint"><Icon name="upload_file" />Déposer les fichiers ici</div>}
       <div className="message-composer__tools">
@@ -255,6 +280,6 @@ export const MessageComposer = memo(function MessageComposer({ topicId, agents, 
         <button type="button" className={`message-composer__send${isSending ? " message-composer__send--sending" : ""}`} disabled={(!body.trim() && !files.length) || disabled || isSending} onClick={() => void submit()} aria-label={isSending ? (files.length ? "Envoi des médias en cours" : "Envoi en cours") : "Envoyer"} title={isSending ? (files.length ? "Envoi des médias en cours" : "Envoi en cours") : "Envoyer"} aria-busy={isSending}><Icon name="arrow_upward" /></button>
       </div>
     </div>
-    <small>Les agents mentionnés, ou celui auquel vous répondez, reçoivent le message et peuvent ouvrir ses fichiers via MCP.</small>
+    <small>Les agents mentionnés reçoivent le message. Utilisez # pour donner une conversation de référence.</small>
   </div>;
 });

@@ -1,0 +1,11 @@
+.participant-picker {
+  position: relative;
+  &__trigger { display: grid; place-items: center; width: 30px; height: 30px; border: 1px solid var(--cs-color-border); border-radius: 9px; background: var(--cs-color-surface-soft); color: var(--cs-color-text-muted); transition: border-color .15s ease, background .15s ease, color .15s ease; &:hover:not(:disabled) { border-color: var(--cs-color-accent); background: var(--cs-color-accent-soft); color: var(--cs-color-accent-strong); } &:focus-visible:not(:disabled) { outline: 2px solid var(--cs-color-accent); outline-offset: 2px; } &:disabled { cursor: not-allowed; opacity: .45; } .icon { font-size: 17px; } }
+  &__options { position: absolute; z-index: 8; top: calc(100% + 8px); right: 0; width: 245px; max-height: 260px; padding: 7px; overflow-y: auto; border: 1px solid var(--cs-color-border); border-radius: 12px; background: var(--cs-color-surface); box-shadow: 0 16px 42px rgba(76, 57, 39, .16); }
+  &__label { display: block; padding: 5px 7px 7px; color: var(--cs-color-text-muted); font-size: 9px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; }
+  &__option { display: flex; align-items: center; gap: 8px; width: 100%; padding: 8px; border: 0; border-radius: 9px; background: transparent; color: inherit; text-align: left; &:hover, &:focus-visible { background: var(--cs-color-accent-soft); } > .icon { margin-left: auto; color: var(--cs-color-accent-strong); animation: participant-picker-spin .8s linear infinite; } }
+  &__status { flex: 0 0 8px; width: 8px; height: 8px; border-radius: 50%; background: #35a779; &--away { background: #bcb2a5; } &--offline { background: #d85f66; } }
+  &__identity { min-width: 0; flex: 1; strong, small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } strong { font-size: 11px; } small { margin-top: 2px; color: var(--cs-color-text-muted); font-size: 9px; } }
+  &__error { display: block; padding: 7px; color: #b5454d; font-size: 10px; }
+}
+@keyframes participant-picker-spin { to { transform: rotate(360deg); } }
