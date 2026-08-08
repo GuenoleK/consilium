@@ -115,6 +115,8 @@ export const createApp = (store = new ConsiliumStore()) => {
       id: agentIdSchema,
       name: z.string().trim().min(1).max(80),
       model: z.string().trim().min(1).optional(),
+      sessionId: z.string().trim().min(1).max(120).optional(),
+      claimSession: z.boolean().default(false),
       status: z.enum(["online", "listening", "working", "away", "offline"]).default("online"),
       activeTopicId: z.string().optional(),
       activeTopicTitle: z.string().trim().min(1).max(200).optional(),
@@ -122,7 +124,10 @@ export const createApp = (store = new ConsiliumStore()) => {
     return context.json(await store.registerAgent(input));
   });
   app.post("/api/agents/:id/disconnect", async (context) => {
-    const agent = await store.disconnectAgent(context.req.param("id"));
+    let body: unknown = {};
+    try { body = await context.req.json(); } catch { /* Browser disconnects may have no body. */ }
+    const input = z.object({ sessionId: z.string().trim().min(1).max(120).optional() }).parse(body);
+    const agent = await store.disconnectAgent(context.req.param("id"), input.sessionId);
     return agent ? context.json(agent) : context.json({ error: "Agent not found" }, 404);
   });
   app.get("/api/tasks", async (context) => context.json(await store.listTasks({

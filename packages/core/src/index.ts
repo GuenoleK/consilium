@@ -52,6 +52,7 @@ export const agentSchema = z.object({
   id: z.string(),
   name: z.string(),
   model: z.string().optional(),
+  sessionId: z.string().optional(),
   status: agentStatusSchema,
   activeTopicId: z.string().optional(),
   activeTopicTitle: z.string().optional(),

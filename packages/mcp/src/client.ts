@@ -53,11 +53,14 @@ export class ConsiliumClient {
     return this.request<AuthorizationRequest>(`/api/authorizations/${id}/consume`, { method: "POST", body: JSON.stringify(input) });
   }
   listAgents() { return this.request<Agent[]>("/api/agents"); }
-  registerAgent(input: { id: string; name: string; model?: string; status: Agent["status"]; activeTopicId?: string; activeTopicTitle?: string }) {
+  registerAgent(input: { id: string; name: string; model?: string; sessionId?: string; claimSession?: boolean; status: Agent["status"]; activeTopicId?: string; activeTopicTitle?: string }) {
     return this.request<Agent>("/api/agents", { method: "POST", body: JSON.stringify(input) });
   }
-  disconnectAgent(id: string) {
-    return this.request<Agent>(`/api/agents/${id}/disconnect`, { method: "POST" });
+  disconnectAgent(id: string, sessionId?: string) {
+    return this.request<Agent>(`/api/agents/${id}/disconnect`, {
+      method: "POST",
+      body: sessionId ? JSON.stringify({ sessionId }) : undefined,
+    });
   }
   listTasks(filters: { topicId?: string; assignedAgentId?: string; activeOnly?: boolean } = {}) {
     const query = new URLSearchParams();

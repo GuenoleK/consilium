@@ -1,5 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { ConsiliumClient } from "./client.js";
 
@@ -7,15 +8,18 @@ const client = new ConsiliumClient();
 const server = new McpServer({ name: "consilium", version: "0.1.0" });
 const result = (value: unknown) => ({ content: [{ type: "text" as const, text: JSON.stringify(value, null, 2) }] });
 const agentIdSchema = z.string().trim().toLowerCase().regex(/^[a-z0-9][a-z0-9_-]{0,31}$/);
+const sessionId = randomUUID();
 type PresenceStatus = "online" | "listening" | "working" | "away" | "offline";
 interface ActivePresence {
   id: string;
   name: string;
   model?: string;
+  sessionId: string;
   status: PresenceStatus;
   activeTopicId?: string;
   activeTopicTitle?: string;
 }
+type PresenceUpdate = Omit<ActivePresence, "sessionId"> & { sessionId?: string };
 let activePresence: ActivePresence | undefined;
 let heartbeatInFlight = false;
 let activeListenCalls = 0;
@@ -31,16 +35,16 @@ const rememberCursor = (topicId: string, cursor?: string) => {
 const topicIncludesAgent = (topic: { participantIds: string[] }, agentId: string) =>
   topic.participantIds.some((participantId) => participantId.toLowerCase() === agentId.toLowerCase());
 
-const setActivePresence = (presence: ActivePresence) => {
+const setActivePresence = (presence: PresenceUpdate) => {
   const previousModel = activePresence?.id === presence.id ? activePresence.model : undefined;
-  activePresence = { ...presence, model: presence.model?.trim() || previousModel };
+  activePresence = { ...presence, sessionId: presence.sessionId || sessionId, model: presence.model?.trim() || previousModel };
 };
 
 const clearActivePresence = (agentId?: string) => {
   if (!agentId || activePresence?.id === agentId) activePresence = undefined;
 };
 
-const setTopicPresence = (presence: Omit<ActivePresence, "activeTopicId" | "activeTopicTitle">, topic: { id: string; title: string }) => {
+const setTopicPresence = (presence: Omit<ActivePresence, "sessionId" | "activeTopicId" | "activeTopicTitle"> & { sessionId?: string }, topic: { id: string; title: string }) => {
   setActivePresence({ ...presence, activeTopicId: topic.id, activeTopicTitle: topic.title });
 };
 
@@ -53,7 +57,10 @@ const sendPresenceHeartbeat = async () => {
       clearActivePresence(registered.id);
       return;
     }
-    if (activePresence) await client.registerAgent(activePresence);
+    if (activePresence) {
+      const registered = await client.registerAgent({ ...activePresence, claimSession: false });
+      if (registered.sessionId && registered.sessionId !== activePresence.sessionId) clearActivePresence(activePresence.id);
+    }
   } catch {
     // The next heartbeat retries after a temporary API interruption.
   } finally {
@@ -164,7 +171,7 @@ server.tool("wait_for_messages", "Keep an agent listening for new topic messages
   try {
     if (agentId) {
       const registered = (await client.listAgents()).find((agent) => agent.id === agentId);
-      if (registered?.status === "offline") return result({ timedOut: false, disconnected: true, cursor: initialCursor, messages: [] });
+      if (registered?.status === "offline" || (registered?.sessionId && registered.sessionId !== sessionId)) return result({ timedOut: false, disconnected: true, cursor: initialCursor, messages: [] });
       setActivePresence({ id: agentId, name: agentName || registered?.name || agentId, model: model || registered?.model, status: "listening" });
       await sendPresenceHeartbeat();
     }
@@ -201,7 +208,7 @@ server.tool("wait_for_messages", "Keep an agent listening for new topic messages
       }
       if (agentId) {
         const agent = (await client.listAgents()).find((candidate) => candidate.id === agentId);
-        if (agent?.status === "offline") {
+        if (agent?.status === "offline" || (agent?.sessionId && agent.sessionId !== sessionId)) {
           clearActivePresence(agentId);
           return result({ timedOut: false, disconnected: true, cursor: topicId ? cursorForTopic(topicId) : initialCursor, messages: [] });
         }
@@ -239,8 +246,8 @@ server.tool("register_agent", "Register or refresh an agent presence at the tabl
   status: z.enum(["online", "listening", "working", "away", "offline"]).optional(),
   activeTopicId: z.string().optional(), activeTopicTitle: z.string().trim().min(1).max(200).optional(),
 }, async ({ id, name, model, status, activeTopicId, activeTopicTitle }) => {
-  const presence = { id, name, model, status: status || "online", activeTopicId, activeTopicTitle };
-  const agent = await client.registerAgent(presence);
+  const presence = { id, name, model, sessionId, status: status || "online", activeTopicId, activeTopicTitle };
+  const agent = await client.registerAgent({ ...presence, claimSession: true });
   if (presence.status === "offline") clearActivePresence(id);
   else setActivePresence(presence);
   return result(agent);
@@ -250,7 +257,7 @@ server.tool("disconnect_agent", "Disconnect an agent from its continuous listeni
   agentId: z.string().min(1),
 }, async ({ agentId }) => {
   clearActivePresence(agentId);
-  return result(await client.disconnectAgent(agentId));
+  return result(await client.disconnectAgent(agentId, sessionId));
 });
 server.tool("read_attachment", "Read the complete base64 content of a durable attachment using the id included in a message. Decode base64 using the attachment name and mediaType.", {
   attachmentId: z.string().min(1),

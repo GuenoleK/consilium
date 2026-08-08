@@ -219,19 +219,25 @@ export class ConsiliumStore {
     });
   }
 
-  async registerAgent(input: Pick<Agent, "id" | "name" | "model" | "status" | "activeTopicId" | "activeTopicTitle">) {
+  async registerAgent(input: Pick<Agent, "id" | "name" | "model" | "sessionId" | "status" | "activeTopicId" | "activeTopicTitle"> & { claimSession?: boolean }) {
     await this.ensureLoaded();
     const normalizedInput = {
-      ...input,
       id: input.id.trim().toLowerCase(),
       name: input.name.trim(),
       model: input.model?.trim() || undefined,
+      sessionId: input.sessionId?.trim() || undefined,
+      status: input.status,
+      activeTopicId: input.activeTopicId,
+      activeTopicTitle: input.activeTopicTitle,
     };
     const found = this.snapshot.agents.find((agent) => agent.id === normalizedInput.id);
+    const sessionSuperseded = Boolean(found?.sessionId && found.sessionId !== normalizedInput.sessionId && !input.claimSession);
+    if (found && sessionSuperseded) return found;
     const agent: Agent = { ...normalizedInput, lastSeenAt: now() };
     if (found) {
       Object.assign(found, {
         name: agent.name,
+        ...(agent.sessionId ? { sessionId: agent.sessionId } : input.claimSession ? { sessionId: undefined } : {}),
         status: agent.status,
         activeTopicId: agent.activeTopicId,
         activeTopicTitle: agent.activeTopicTitle,
@@ -245,10 +251,11 @@ export class ConsiliumStore {
     return found || agent;
   }
 
-  async disconnectAgent(id: string) {
+  async disconnectAgent(id: string, sessionId?: string) {
     await this.ensureLoaded();
     const agent = this.snapshot.agents.find((candidate) => candidate.id === id);
     if (!agent) return undefined;
+    if (sessionId && agent.sessionId && agent.sessionId !== sessionId) return agent;
     agent.status = "offline";
     agent.activeTopicId = undefined;
     agent.activeTopicTitle = undefined;
