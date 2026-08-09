@@ -104,7 +104,7 @@ interface AgentPanelProps {
 export function AgentPanel({ agents, topics, activeTopicId, tasks, onDisconnect, onDeleteAgent, onAddParticipant, onRefreshAgents, onCreateTask, onTaskInstruction, onResolveApproval, onCancelTask, onArchiveTask, onUnarchiveTask, onDeleteTask, onClose, onMobileClose }: AgentPanelProps) {
   const { spinning: refreshing, runSpinCycle } = useSpinCycle();
   const [freeExpanded, setFreeExpanded] = useState(true);
-  const [expandedRoomIds, setExpandedRoomIds] = useState<Set<string>>(() => new Set());
+  const [expandedRoomIds, setExpandedRoomIds] = useState<Set<string>>(() => activeTopicId ? new Set([activeTopicId]) : new Set());
   const [roomPreference, setRoomPreference] = useState<RoomPreference>(readRoomPreference);
   const [roomSortMenuOpen, setRoomSortMenuOpen] = useState(false);
   const [roomDrag, setRoomDrag] = useState<RoomDragState>();
@@ -127,6 +127,11 @@ export function AgentPanel({ agents, topics, activeTopicId, tasks, onDisconnect,
   useEffect(() => {
     try { window.localStorage.setItem(roomSortStorageKey, JSON.stringify(roomPreference)); } catch { /* Preferences remain in memory when storage is unavailable. */ }
   }, [roomPreference]);
+
+  useEffect(() => {
+    if (!activeTopicId) return;
+    setExpandedRoomIds((current) => current.size === 1 && current.has(activeTopicId) ? current : new Set([activeTopicId]));
+  }, [activeTopicId]);
 
   useEffect(() => {
     if (!roomSortMenuOpen) return;
