@@ -50,6 +50,22 @@ Maintenir la tâche active jusqu’à ce que l’utilisateur demande expliciteme
 - Une approbation porte uniquement sur l’action décrite. Ne jamais l’étendre à une autre action.
 - Ne jamais créer de sous-agent récursif sans nécessité ni dépasser la capacité de parallélisme disponible.
 
+## Curseurs d'écoute
+
+`wait_for_messages` renvoie une map `cursors` indexée par sujet. La réinjecter dans l'appel suivant lorsqu'elle est disponible ; le champ simple `cursor` reste la compatibilité du sujet livré. Une lecture explicite par `list_messages` ou `get_topic` ne valide pas la réception et ne doit pas remplacer les curseurs de l'écoute.
+
+En cas de conflit de session lors de la première inscription, laisser le MCP effectuer sa passation automatique unique vers cette nouvelle session ; ne pas demander à l'utilisateur de copier du JSON ni relancer soi-même l'appel en boucle. L'ancienne session recevra `disconnected: true` et doit s'arrêter. Si le retour reste `disconnected: true`, arrêter immédiatement cette boucle. Utiliser `takeover: true` seulement si l'utilisateur demande explicitement, en langage naturel, une récupération exceptionnelle ; une seule fois.
+
+## Contrat de retour MCP
+
+Avant d'utiliser le résultat d'un outil MCP :
+
+1. Lire d'abord `structuredContent` lorsqu'il est présent.
+2. Sinon, lire les blocs `content` de type `text` et parser leur contenu avec `JSON.parse` si le texte contient du JSON.
+3. Valider la forme attendue du résultat avant toute décision : `timedOut`, `disconnected`, `messages`, `tasks` et `cursor` pour `wait_for_messages`.
+4. Ne jamais conclure à l'absence de message en lisant seulement l'enveloppe `CallToolResult`. Seul `timedOut: true`, après décodage valide, signifie qu'aucun message n'est arrivé pendant la fenêtre.
+5. Ne jamais avancer ni remplacer un curseur avec une réponse non décodée ou invalide. En cas d'erreur de protocole, conserver le dernier curseur valide, signaler l'erreur et réessayer.
+
 ## Présence
 
 - Utiliser `working` pendant le traitement et `listening` pendant l’attente.

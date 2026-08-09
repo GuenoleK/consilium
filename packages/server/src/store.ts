@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { homedir } from "node:os";
-import type { Agent, ApprovalRequest, Attachment, AuthorizationRequest, ConsiliumSnapshot, ConsiliumTask, Message, RiskLevel, TaskStatus, Topic } from "@consilium/core";
+import { agentPresenceStaleAfterMs, type Agent, type ApprovalRequest, type Attachment, type AuthorizationRequest, type ConsiliumSnapshot, type ConsiliumTask, type Message, type RiskLevel, type TaskStatus, type Topic } from "@consilium/core";
 
 const now = () => new Date().toISOString();
 const activeAgentStatuses = new Set<Agent["status"]>(["online", "listening", "working"]);
@@ -11,7 +11,8 @@ const reservedAgentIds = new Set(["human", "system", "vous", "tous", "all"]);
 // easily go 20-40s without touching this server at all; a short TTL here reads that normal work
 // gap as "inactive" even though the agent is actively engaged with the task. Generous enough to
 // tolerate realistic work stretches, still short enough to catch a genuine disconnect promptly.
-const presenceStaleAfterMs = 90_000;
+const hasFreshPresence = (agent: Agent) => activeAgentStatuses.has(agent.status)
+  && Date.now() - new Date(agent.lastSeenAt).getTime() <= agentPresenceStaleAfterMs;
 
 const normalizeTopicMentionKey = (title: string) => title
   .normalize("NFKD")
@@ -73,6 +74,7 @@ const initialSnapshot = (): ConsiliumSnapshot => {
 export class ConsiliumStore {
   private snapshot: ConsiliumSnapshot = initialSnapshot();
   private loaded = false;
+  private persistTail: Promise<void> = Promise.resolve();
   private readonly filePath: string;
   private readonly mediaDirectory: string;
 
@@ -117,11 +119,21 @@ export class ConsiliumStore {
     this.loaded = true;
   }
 
-  private async persist() {
-    await mkdir(dirname(this.filePath), { recursive: true });
-    const temporaryPath = `${this.filePath}.${process.pid}.tmp`;
-    await writeFile(temporaryPath, JSON.stringify(this.snapshot, null, 2), "utf8");
-    await rename(temporaryPath, this.filePath);
+  private persist() {
+    const snapshotText = JSON.stringify(this.snapshot, null, 2);
+    const temporaryPath = `${this.filePath}.${process.pid}.${randomUUID()}.tmp`;
+    const writeSnapshot = async () => {
+      await mkdir(dirname(this.filePath), { recursive: true });
+      try {
+        await writeFile(temporaryPath, snapshotText, "utf8");
+        await rename(temporaryPath, this.filePath);
+      } finally {
+        await unlink(temporaryPath).catch(() => undefined);
+      }
+    };
+    const next = this.persistTail.then(writeSnapshot, writeSnapshot);
+    this.persistTail = next.catch(() => undefined);
+    return next;
   }
 
   async listTopics() {
@@ -290,14 +302,20 @@ export class ConsiliumStore {
     await this.ensureLoaded();
     const currentTime = Date.now();
     return this.snapshot.agents.map((agent) => {
-      const isStale = currentTime - new Date(agent.lastSeenAt).getTime() > presenceStaleAfterMs;
+      const isStale = currentTime - new Date(agent.lastSeenAt).getTime() > agentPresenceStaleAfterMs;
       return isStale && activeAgentStatuses.has(agent.status)
         ? { ...agent, status: "away" as const, activeTopicId: undefined, activeTopicTitle: undefined }
         : agent;
     });
   }
 
-  async registerAgent(input: Pick<Agent, "id" | "name" | "model" | "sessionId" | "status" | "activeTopicId" | "activeTopicTitle"> & { claimSession?: boolean }) {
+  async getAgent(id: string) {
+    await this.ensureLoaded();
+    const normalizedId = id.trim().toLowerCase();
+    return this.snapshot.agents.find((agent) => agent.id === normalizedId);
+  }
+
+  async registerAgent(input: Pick<Agent, "id" | "name" | "model" | "sessionId" | "status" | "activeTopicId" | "activeTopicTitle"> & { claimSession?: boolean; takeover?: boolean }) {
     await this.ensureLoaded();
     const normalizedInput = {
       id: input.id.trim().toLowerCase(),
@@ -310,7 +328,14 @@ export class ConsiliumStore {
     };
     const found = this.snapshot.agents.find((agent) => agent.id === normalizedInput.id);
     const sessionSuperseded = Boolean(found?.sessionId && found.sessionId !== normalizedInput.sessionId && !input.claimSession);
-    if (found && sessionSuperseded) return found;
+    const activeSessionCannotBeClaimed = Boolean(
+      found?.sessionId
+      && found.sessionId !== normalizedInput.sessionId
+      && input.claimSession
+      && !input.takeover
+      && hasFreshPresence(found),
+    );
+    if (found && (sessionSuperseded || activeSessionCannotBeClaimed)) return found;
     const agent: Agent = { ...normalizedInput, lastSeenAt: now() };
     if (found) {
       Object.assign(found, {

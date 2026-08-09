@@ -89,6 +89,7 @@ export const MessageComposer = memo(function MessageComposer({ topicId, agents, 
     .filter((agent) => !mentionContext?.query || agent.id.includes(mentionContext.query) || agent.name.toLowerCase().includes(mentionContext.query))
     .slice(0, 8);
   const conversationSuggestions = topics
+    .filter((topic) => topic.id !== topicId)
     .filter((topic) => !mentionContext?.query || topic.mentionKey.includes(mentionContext.query) || topic.title.toLowerCase().includes(mentionContext.query))
     .slice(0, 8);
 

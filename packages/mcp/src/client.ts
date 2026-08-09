@@ -30,10 +30,10 @@ export class ConsiliumClient {
     const query = since ? `?since=${encodeURIComponent(since)}` : "";
     return this.request<Message[]>(`/api/topics/${topicId}/messages${query}`);
   }
-  postMessage(topicId: string, body: string, agentId: string, agentName: string, attachmentIds: string[] = [], replyToId?: string) {
+  postMessage(topicId: string, body: string, agentId: string, agentName: string, attachmentIds: string[] = [], replyToId?: string, sessionId?: string) {
     return this.request<Message>(`/api/topics/${topicId}/messages`, {
       method: "POST",
-      body: JSON.stringify({ body, authorId: agentId, authorName: agentName, authorKind: "agent", attachmentIds, replyToId }),
+      body: JSON.stringify({ body, authorId: agentId, authorName: agentName, authorKind: "agent", attachmentIds, replyToId, sessionId }),
     });
   }
   async uploadAttachment(topicId: string, filePath: string, mediaType?: string) {
@@ -53,7 +53,7 @@ export class ConsiliumClient {
     return this.request<AuthorizationRequest>(`/api/authorizations/${id}/consume`, { method: "POST", body: JSON.stringify(input) });
   }
   listAgents() { return this.request<Agent[]>("/api/agents"); }
-  registerAgent(input: { id: string; name: string; model?: string; sessionId?: string; claimSession?: boolean; status: Agent["status"]; activeTopicId?: string; activeTopicTitle?: string }) {
+  registerAgent(input: { id: string; name: string; model?: string; sessionId?: string; claimSession?: boolean; takeover?: boolean; status: Agent["status"]; activeTopicId?: string; activeTopicTitle?: string }) {
     return this.request<Agent>("/api/agents", { method: "POST", body: JSON.stringify(input) });
   }
   disconnectAgent(id: string, sessionId?: string) {

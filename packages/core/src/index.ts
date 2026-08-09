@@ -2,6 +2,7 @@ import { z } from "zod";
 
 export const participantKindSchema = z.enum(["human", "agent", "system"]);
 export const agentStatusSchema = z.enum(["online", "listening", "working", "away", "offline"]);
+export const agentPresenceStaleAfterMs = 90_000;
 export const taskStatusSchema = z.enum(["pending", "claimed", "running", "awaiting_approval", "waiting_for_input", "completed", "failed", "cancelled"]);
 export const approvalStatusSchema = z.enum(["pending", "approved", "rejected"]);
 export const authorizationStatusSchema = z.enum(["pending", "approved", "rejected"]);

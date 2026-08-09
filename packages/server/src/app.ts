@@ -54,9 +54,16 @@ export const createApp = (store = new ConsiliumStore()) => {
       authorId: z.string().min(1), authorName: z.string().min(1),
       authorKind: z.enum(["human", "agent", "system"]), body: z.string().min(1),
       attachmentIds: z.array(z.string()).default([]),
+      sessionId: z.string().trim().min(1).max(120).optional(),
       replyToId: z.string().optional(),
     }).parse(await context.req.json());
-    const { attachmentIds, replyToId, ...messageInput } = input;
+    const { attachmentIds, replyToId, sessionId, ...messageInput } = input;
+    if (messageInput.authorKind === "agent") {
+      const agent = await store.getAgent(messageInput.authorId);
+      if (!agent || agent.status === "offline" || !sessionId || agent.sessionId !== sessionId) {
+        return context.json({ error: "Agent session is not the current owner; restart this Consilium MCP process and register the agent again" }, 409);
+      }
+    }
     const replyToMessage = replyToId ? (await store.listMessages(context.req.param("id"))).find((message) => message.id === replyToId) : undefined;
     if (replyToId && !replyToMessage) return context.json({ error: "Reply target not found in this topic" }, 404);
     const replyTo = replyToMessage && {
@@ -130,6 +137,7 @@ export const createApp = (store = new ConsiliumStore()) => {
       model: z.string().trim().min(1).optional(),
       sessionId: z.string().trim().min(1).max(120).optional(),
       claimSession: z.boolean().default(false),
+      takeover: z.boolean().default(false),
       status: z.enum(["online", "listening", "working", "away", "offline"]).default("online"),
       activeTopicId: z.string().optional(),
       activeTopicTitle: z.string().trim().min(1).max(200).optional(),
