@@ -1,4 +1,4 @@
-import { memo, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { Agent, Message } from "@consilium/core";
 import { api } from "../../../../core/api";
 import { Icon } from "../../../../shared/components/Icon/Icon";
@@ -8,6 +8,7 @@ import { MediaGallery } from "./MediaGallery";
 import "./MessageList.scss";
 const time = (value: string) => new Intl.DateTimeFormat("fr", { hour: "2-digit", minute: "2-digit" }).format(new Date(value));
 const fileExtension = (name: string) => name.includes(".") ? name.split(".").pop()?.toUpperCase() : "FICHIER";
+const REPLY_TARGET_HIGHLIGHT_DURATION = 1800;
 const renderAttachment = (attachment: Message["attachments"][number]) => {
   if (attachment.mediaType.startsWith("image/") || attachment.mediaType.startsWith("video/")) return null;
   const url = api.attachmentUrl(attachment.id);
@@ -79,7 +80,7 @@ export const MessageList = memo(function MessageList({ messages, typingAgents, h
   typingAgents: Agent[];
   hasMoreBefore: boolean;
   loadingOlder: boolean;
-  onLoadOlder: () => void;
+  onLoadOlder: () => Promise<void>;
   onReply: (message: Message) => void;
   onOpenTopic: (topicId: string) => void;
 }) {
@@ -89,13 +90,19 @@ export const MessageList = memo(function MessageList({ messages, typingAgents, h
   const initializedRef = useRef(false);
   const prependScrollPositionRef = useRef<{ height: number; top: number } | undefined>(undefined);
   const isPrependingRef = useRef(false);
+  const messageRefs = useRef(new Map<string, HTMLElement>());
   const bodyRefs = useRef(new Map<string, HTMLDivElement>());
   const copyFeedbackTimerRef = useRef<number | undefined>(undefined);
+  const replyTargetHighlightTimerRef = useRef<number | undefined>(undefined);
+  const jumpLoadInFlightRef = useRef(false);
   const [copyFeedback, setCopyFeedback] = useState<CopyFeedback>();
+  const [highlightedMessageId, setHighlightedMessageId] = useState<string>();
+  const [pendingReplyTargetId, setPendingReplyTargetId] = useState<string>();
   let enteringMessageId: string | undefined;
 
   useEffect(() => () => {
     if (copyFeedbackTimerRef.current) window.clearTimeout(copyFeedbackTimerRef.current);
+    if (replyTargetHighlightTimerRef.current) window.clearTimeout(replyTargetHighlightTimerRef.current);
   }, []);
 
   if (initializedRef.current && !isPrependingRef.current && document.visibilityState === "visible") {
@@ -124,15 +131,59 @@ export const MessageList = memo(function MessageList({ messages, typingAgents, h
     if (list && shouldFollowRef.current && !prependScrollPositionRef.current) list.scrollTop = list.scrollHeight;
   }, [typingAgents]);
 
-  const loadOlder = () => {
+  const loadOlder = useCallback(() => {
     const list = listRef.current;
     if (list) {
       prependScrollPositionRef.current = { height: list.scrollHeight, top: list.scrollTop };
       shouldFollowRef.current = false;
       isPrependingRef.current = true;
     }
-    onLoadOlder();
-  };
+    return onLoadOlder();
+  }, [onLoadOlder]);
+
+  const highlightMessage = useCallback((messageId: string) => {
+    setHighlightedMessageId(messageId);
+    if (replyTargetHighlightTimerRef.current) window.clearTimeout(replyTargetHighlightTimerRef.current);
+    replyTargetHighlightTimerRef.current = window.setTimeout(() => setHighlightedMessageId(undefined), REPLY_TARGET_HIGHLIGHT_DURATION);
+  }, []);
+
+  const scrollToMessage = useCallback((messageId: string) => {
+    const target = messageRefs.current.get(messageId);
+    if (!target) return false;
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    target.scrollIntoView({ behavior: reducedMotion ? "auto" : "smooth", block: "start" });
+    target.focus({ preventScroll: true });
+    highlightMessage(messageId);
+    return true;
+  }, [highlightMessage]);
+
+  const jumpToMessage = useCallback((messageId: string) => {
+    if (scrollToMessage(messageId)) return;
+    setPendingReplyTargetId(messageId);
+  }, [scrollToMessage]);
+
+  useEffect(() => {
+    if (!pendingReplyTargetId) return;
+    if (scrollToMessage(pendingReplyTargetId)) {
+      setPendingReplyTargetId(undefined);
+      return;
+    }
+    if (!hasMoreBefore) {
+      setPendingReplyTargetId(undefined);
+      return;
+    }
+    if (loadingOlder || jumpLoadInFlightRef.current) return;
+    jumpLoadInFlightRef.current = true;
+    void loadOlder()
+      .catch(() => undefined)
+      .finally(() => {
+        jumpLoadInFlightRef.current = false;
+      });
+  }, [hasMoreBefore, loadingOlder, loadOlder, messages, pendingReplyTargetId, scrollToMessage]);
+
+  useEffect(() => {
+    if (messages.length === 0) setPendingReplyTargetId(undefined);
+  }, [messages.length]);
 
   const copyMessage = async (message: Message) => {
     const bodyElement = bodyRefs.current.get(message.id);
@@ -158,11 +209,25 @@ export const MessageList = memo(function MessageList({ messages, typingAgents, h
   >
     <div className="message-list__day"><span>Aujourd’hui</span></div>
     {hasMoreBefore && <div className="message-list__history"><button type="button" onClick={loadOlder} disabled={loadingOlder}>{loadingOlder ? "Chargement…" : "Afficher les messages précédents"}</button></div>}
-    {messages.map((message) => <article className={`message-list__message message-list__message--${message.authorKind}${message.id === enteringMessageId ? " message-list__message--entering" : ""}`} key={message.id}>
+    {messages.map((message) => <article
+      className={`message-list__message message-list__message--${message.authorKind}${message.id === enteringMessageId ? " message-list__message--entering" : ""}${message.id === highlightedMessageId ? " message-list__message--highlighted" : ""}`}
+      key={message.id}
+      ref={(element) => {
+        if (element) messageRefs.current.set(message.id, element);
+        else messageRefs.current.delete(message.id);
+      }}
+      tabIndex={-1}
+    >
       <div className="message-list__avatar">{message.authorKind === "human" ? "VO" : message.authorName.slice(0, 2).toUpperCase()}</div>
       <div className="message-list__content">
         <header><strong>{message.authorName}</strong><span>{time(message.createdAt)}</span>{message.authorKind === "agent" && <em>Agent</em>}</header>
-        {message.replyTo && <div className="message-list__reply"><Icon name="reply" /><span><strong>{message.replyTo.authorName}</strong><small>{message.replyTo.body || "Pièce jointe"}</small></span></div>}
+        {message.replyTo && <button
+          className="message-list__reply"
+          type="button"
+          onClick={() => jumpToMessage(message.replyTo!.id)}
+          aria-label={`Afficher le message cité de ${message.replyTo.authorName}`}
+          title="Remonter au message cité"
+        ><Icon name="reply" /><span><strong>{message.replyTo.authorName}</strong><small>{message.replyTo.body || "Pièce jointe"}</small></span></button>}
         {message.attachments.length > 0 && <><MediaGallery attachments={message.attachments} /><div className="message-list__attachments">{message.attachments.filter((attachment) => !attachment.mediaType.startsWith("image/") && !attachment.mediaType.startsWith("video/")).map((attachment) => <div key={attachment.id}>{renderAttachment(attachment)}</div>)}</div></>}
         {message.body && <div
           ref={(element) => {
