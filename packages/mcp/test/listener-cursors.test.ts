@@ -29,3 +29,29 @@ test("accepts a returned cursor map after an MCP restart without collapsing it t
   assert.equal(cursors.forTopic("topic-b"), supplied["topic-b"]);
   assert.equal(cursors.forTopic("topic-c"), "2026-08-09T09:02:00.000Z");
 });
+
+test("persisted cursors survive a restart and only move forward across processes", async () => {
+  const { mkdtemp, rm } = await import("node:fs/promises");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const { ListenerCursorFile } = await import("../src/listenerCursors.js");
+  const directory = await mkdtemp(join(tmpdir(), "consilium-cursors-"));
+  try {
+    const mcp = new ListenerCursorStore(new ListenerCursorFile(directory));
+    mcp.bind("claude");
+    mcp.remember("topic-a", "2026-09-28T10:00:00.000Z");
+
+    const background = new ListenerCursorStore(new ListenerCursorFile(directory));
+    background.bind("claude");
+    assert.equal(background.get("topic-a"), "2026-09-28T10:00:00.000Z");
+    background.remember("topic-a", "2026-09-28T10:05:00.000Z");
+
+    // A stale writer cannot move the shared position backwards.
+    mcp.remember("topic-a", "2026-09-28T10:01:00.000Z");
+    const restarted = new ListenerCursorStore(new ListenerCursorFile(directory));
+    restarted.bind("claude");
+    assert.equal(restarted.get("topic-a"), "2026-09-28T10:05:00.000Z");
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});

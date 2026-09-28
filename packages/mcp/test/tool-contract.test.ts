@@ -1,5 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { JsonSchemaDialectTransport } from "../src/schemaDialectTransport.js";
 import { waitForMessagesOutputSchema } from "../src/toolSchemas.js";
 import { toolResult } from "../src/toolResult.js";
 
@@ -49,6 +53,29 @@ test("wait_for_messages output schema distinguishes delivery from timeout", () =
   });
   assert.equal(timeout.timedOut, true);
   assert.equal(timeout.messages.length, 0);
+});
+
+test("wait_for_messages publishes a JSON Schema 2020-12 output contract", async () => {
+  const server = new McpServer({ name: "consilium-test", version: "0.1.0" });
+  server.registerTool("wait_for_messages", {
+    outputSchema: waitForMessagesOutputSchema,
+  }, async () => toolResult(deliveredResult));
+
+  const client = new Client({ name: "consilium-test-client", version: "0.1.0" });
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+
+  await Promise.all([server.connect(new JsonSchemaDialectTransport(serverTransport)), client.connect(clientTransport)]);
+  try {
+    const listedTool = (await client.listTools()).tools.find((tool) => tool.name === "wait_for_messages");
+    assert.ok(listedTool?.outputSchema);
+    assert.equal(listedTool.outputSchema["$schema"], "https://json-schema.org/draft/2020-12/schema");
+
+    const response = await client.callTool({ name: "wait_for_messages", arguments: {} });
+    assert.deepEqual(response.structuredContent, deliveredResult);
+  } finally {
+    await client.close();
+    await server.close();
+  }
 });
 
 test("an unparsed MCP envelope is rejected instead of being mistaken for a timeout", () => {
