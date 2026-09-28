@@ -138,3 +138,27 @@ test("does not let a fresh agent session displace the current owner", async () =
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+test("code spans and fenced blocks never produce mentions", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "consilium-code-mentions-"));
+
+  try {
+    const store = new ConsiliumStore(join(directory, "consilium.json"));
+    const topic = (await store.listTopics())[0];
+    await store.registerAgent({ id: "claude", name: "Claude", model: "test", sessionId: "session-1", claimSession: true, status: "listening" });
+    await store.addParticipant(topic.id, "claude");
+
+    const message = await store.addMessage({
+      topicId: topic.id,
+      authorId: "claude",
+      authorName: "Claude",
+      authorKind: "agent",
+      body: "Ajouter `@OptIn(ExperimentalApi::class)` puis :\n```kotlin\n@Composable\nfun Screen() {}\n```\n@vous c'est prêt.",
+      attachments: [],
+    });
+
+    assert.deepEqual(message.mentions, ["vous"]);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});

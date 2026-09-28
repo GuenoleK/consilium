@@ -37,6 +37,10 @@ const uniqueTopicMentionKey = (title: string, usedKeys: Set<string>, fallbackId?
 
 const agentMentionPattern = /(?<![\p{L}\p{N}._-])@([\p{L}\p{N}_-]+)/gu;
 const topicMentionPattern = /(?<![\p{L}\p{N}._-])#([\p{L}\p{N}_-]+)/gu;
+// Code is quoted material, not addressing: `@OptIn(...)` or a fenced snippet must never be read as a
+// mention (the web renderer already ignores code for the same reason).
+const codePattern = /```[\s\S]*?(?:```|$)|`[^`\r\n]*`/g;
+export const stripCode = (body: string) => body.replace(codePattern, " ");
 
 const initialSnapshot = (): ConsiliumSnapshot => {
   const createdAt = now();
@@ -231,14 +235,15 @@ export class ConsiliumStore {
     await this.ensureLoaded();
     const topic = this.snapshot.topics.find((candidate) => candidate.id === input.topicId);
     if (!topic) throw new Error("Topic not found");
-    const mentions = [...input.body.matchAll(agentMentionPattern)].map((match) => match[1].toLowerCase());
+    const addressableBody = stripCode(input.body);
+    const mentions = [...addressableBody.matchAll(agentMentionPattern)].map((match) => match[1].toLowerCase());
     const reservedMentions = new Set(["vous", "tous", "all"]);
     const participantIds = new Set(topic.participantIds.map((participantId) => participantId.toLowerCase()));
     participantIds.add(input.authorId.toLowerCase());
     const outsideParticipants = [...new Set(mentions.filter((mention) => !reservedMentions.has(mention) && !participantIds.has(mention)))];
     if (outsideParticipants.length) throw new Error(`Agent(s) not participating in this topic: ${outsideParticipants.join(", ")}`);
     if (input.replyTo?.authorKind === "agent") mentions.push(input.replyTo.authorId.toLowerCase());
-    const topicMentions = [...new Set([...input.body.matchAll(topicMentionPattern)].map((match) => match[1].toLowerCase()))]
+    const topicMentions = [...new Set([...addressableBody.matchAll(topicMentionPattern)].map((match) => match[1].toLowerCase()))]
       .flatMap((mentionKey) => {
         const referencedTopic = this.snapshot.topics.find((candidate) => candidate.mentionKey.toLowerCase() === mentionKey);
         return referencedTopic ? [{ topicId: referencedTopic.id, mentionKey: referencedTopic.mentionKey, title: referencedTopic.title }] : [];
