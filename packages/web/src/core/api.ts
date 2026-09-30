@@ -4,6 +4,10 @@ export interface MessagePage {
   messages: Message[];
   hasMoreBefore: boolean;
 }
+// Protocol identity of the human participant: `@vous` is the mention agents use to address
+// them, so these values stay stable whatever the UI language. The UI shows `common.you`.
+export const HUMAN_AUTHOR_NAME = "Vous";
+export const HUMAN_MENTION = "vous";
 const baseUrl = import.meta.env.VITE_CONSILIUM_API_URL || "/api";
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${baseUrl}${path}`, { ...init, headers: { "content-type": "application/json", ...init?.headers } });
@@ -27,7 +31,7 @@ export const api = {
   resetTopic: (topicId: string) => request<Topic>(`/topics/${topicId}/reset`, { method: "POST" }),
   deleteTopic: (topicId: string) => request<void>(`/topics/${topicId}`, { method: "DELETE" }),
   sendMessage: (topicId: string, body: string, attachmentIds: string[] = [], replyToId?: string) => request<Message>(`/topics/${topicId}/messages`, {
-    method: "POST", body: JSON.stringify({ authorId: "human", authorName: "Vous", authorKind: "human", body, attachmentIds, replyToId }),
+    method: "POST", body: JSON.stringify({ authorId: "human", authorName: HUMAN_AUTHOR_NAME, authorKind: "human", body, attachmentIds, replyToId }),
   }),
   uploadAttachment: async (topicId: string, file: File) => {
     const form = new FormData();
@@ -48,7 +52,7 @@ export const api = {
   createTask: (input: { topicId: string; title: string; description: string; assignedAgentId?: string }) =>
     request<ConsiliumTask>("/tasks", { method: "POST", body: JSON.stringify({ ...input, requestedBy: "human" }) }),
   addTaskInstruction: (taskId: string, body: string) => request<ConsiliumTask>(`/tasks/${taskId}/instructions`, {
-    method: "POST", body: JSON.stringify({ authorId: "human", authorName: "Vous", body }),
+    method: "POST", body: JSON.stringify({ authorId: "human", authorName: HUMAN_AUTHOR_NAME, body }),
   }),
   resolveApproval: (taskId: string, approvalId: string, decision: "approved" | "rejected", decisionNote?: string) =>
     request<{ task: ConsiliumTask }>(`/tasks/${taskId}/approvals/${approvalId}/resolve`, {

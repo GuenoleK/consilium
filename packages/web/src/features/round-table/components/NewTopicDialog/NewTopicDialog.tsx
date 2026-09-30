@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
+import { useTranslation } from "../../../../i18n";
 import { Icon } from "../../../../shared/components/Icon/Icon";
 import "./NewTopicDialog.scss";
 
@@ -10,6 +11,7 @@ interface NewTopicDialogProps {
 }
 
 export function NewTopicDialog({ open, onClose, onCreate }: NewTopicDialogProps) {
+  const { t } = useTranslation();
   const [rendered, setRendered] = useState(open);
   const [closing, setClosing] = useState(false);
   const [title, setTitle] = useState("");
@@ -75,7 +77,7 @@ export function NewTopicDialog({ open, onClose, onCreate }: NewTopicDialogProps)
       await onCreate({ title: title.trim(), description: description.trim() });
       onClose();
     } catch {
-      setError("Le sujet n’a pas pu être créé. Vérifiez que Consilium est bien démarré.");
+      setError(t("newTopicDialog.error"));
       setSubmitting(false);
     }
   };
@@ -90,33 +92,33 @@ export function NewTopicDialog({ open, onClose, onCreate }: NewTopicDialogProps)
       <header className="new-topic-dialog__header">
         <span className="new-topic-dialog__icon"><Icon name="forum" filled /></span>
         <div>
-          <span>Nouveau sujet</span>
-          <h2 id="new-topic-dialog-title">Ouvrir une nouvelle table</h2>
+          <span>{t("newTopicDialog.eyebrow")}</span>
+          <h2 id="new-topic-dialog-title">{t("newTopicDialog.title")}</h2>
         </div>
-        <button type="button" onClick={closeWithAnimation} disabled={submitting} aria-label="Fermer"><Icon name="close" /></button>
+        <button type="button" onClick={closeWithAnimation} disabled={submitting} aria-label={t("common.close")}><Icon name="close" /></button>
       </header>
 
       <form className="new-topic-dialog__form" onSubmit={(event) => void submit(event)}>
         <label>
-          <span>Nom du sujet</span>
+          <span>{t("newTopicDialog.name")}</span>
           <input
             ref={titleRef}
             value={title}
             onChange={(event) => setTitle(event.target.value)}
             maxLength={80}
-            placeholder="Ex. Refonte de l’onboarding"
+            placeholder={t("newTopicDialog.namePlaceholder")}
             disabled={submitting}
             required
           />
         </label>
 
         <label>
-          <span>Contexte <small>Optionnel</small></span>
+          <span>{t("newTopicDialog.context")} <small>{t("newTopicDialog.optional")}</small></span>
           <textarea
             value={description}
             onChange={(event) => setDescription(event.target.value)}
             maxLength={240}
-            placeholder="Donnez aux participants quelques repères pour commencer la discussion…"
+            placeholder={t("newTopicDialog.contextPlaceholder")}
             disabled={submitting}
           />
           <small className="new-topic-dialog__count">{description.length}/240</small>
@@ -125,14 +127,14 @@ export function NewTopicDialog({ open, onClose, onCreate }: NewTopicDialogProps)
         {error && <p className="new-topic-dialog__error" role="alert"><Icon name="error" />{error}</p>}
 
         <footer className="new-topic-dialog__actions">
-          <button type="button" className="new-topic-dialog__cancel" onClick={closeWithAnimation} disabled={submitting}>Annuler</button>
+          <button type="button" className="new-topic-dialog__cancel" onClick={closeWithAnimation} disabled={submitting}>{t("common.cancel")}</button>
           <button
             type="submit"
             className={`new-topic-dialog__submit${submitting ? " new-topic-dialog__submit--loading" : ""}`}
             disabled={!title.trim() || submitting}
           >
             <Icon name={submitting ? "progress_activity" : "add"} />
-            {submitting ? "Création…" : "Créer le sujet"}
+            {submitting ? t("newTopicDialog.submitting") : t("newTopicDialog.submit")}
           </button>
         </footer>
       </form>

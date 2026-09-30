@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
 import type { Agent, ConsiliumTask, Topic } from "@consilium/core";
+import { useTranslation } from "../../../../i18n";
 import { Icon } from "../../../../shared/components/Icon/Icon";
 import { useSpinCycle } from "../../../../shared/hooks/useSpinCycle";
 import { TaskQueue } from "../TaskQueue/TaskQueue";
@@ -8,13 +9,6 @@ import "./AgentPanel.scss";
 
 const initials = (name: string) => name.slice(0, 2).toUpperCase();
 const connectedStatuses = new Set<Agent["status"]>(["online", "listening", "working"]);
-const statusLabels: Record<Agent["status"], string> = {
-  online: "Connecté",
-  listening: "En écoute",
-  working: "En réflexion",
-  away: "Inactif",
-  offline: "Déconnecté",
-};
 
 type RoomSortMode = "alphabetical" | "chronological" | "custom";
 interface RoomPreference { mode: RoomSortMode; customOrder: string[]; }
@@ -38,12 +32,13 @@ const readRoomPreference = (): RoomPreference => {
   }
 };
 
-const compareRoomTitles = (left: RoomRecord, right: RoomRecord) =>
-  left.topic.title.localeCompare(right.topic.title, "fr", { sensitivity: "base" }) || left.topic.id.localeCompare(right.topic.id);
+const compareRoomTitles = (locale: string) => (left: RoomRecord, right: RoomRecord) =>
+  left.topic.title.localeCompare(right.topic.title, locale, { sensitivity: "base" }) || left.topic.id.localeCompare(right.topic.id);
 
-const sortRooms = (rooms: RoomRecord[], preference: RoomPreference) => {
+const sortRooms = (rooms: RoomRecord[], preference: RoomPreference, locale: string) => {
+  const compareRoomTitle = compareRoomTitles(locale);
   const sorted = [...rooms];
-  if (preference.mode === "chronological") return sorted.sort((left, right) => left.topic.createdAt.localeCompare(right.topic.createdAt) || compareRoomTitles(left, right));
+  if (preference.mode === "chronological") return sorted.sort((left, right) => left.topic.createdAt.localeCompare(right.topic.createdAt) || compareRoomTitle(left, right));
   if (preference.mode === "custom") {
     const customIndexes = new Map(preference.customOrder.map((id, index) => [id, index]));
     return sorted.sort((left, right) => {
@@ -52,10 +47,10 @@ const sortRooms = (rooms: RoomRecord[], preference: RoomPreference) => {
       if (leftIndex !== undefined && rightIndex !== undefined) return leftIndex - rightIndex;
       if (leftIndex !== undefined) return -1;
       if (rightIndex !== undefined) return 1;
-      return compareRoomTitles(left, right);
+      return compareRoomTitle(left, right);
     });
   }
-  return sorted.sort(compareRoomTitles);
+  return sorted.sort(compareRoomTitle);
 };
 
 function AgentEntry({ agent, index, contextTopicId, onDisconnect, onDelete }: {
@@ -65,19 +60,21 @@ function AgentEntry({ agent, index, contextTopicId, onDisconnect, onDelete }: {
   onDisconnect: (id: string) => void;
   onDelete: (id: string) => void;
 }) {
+  const { t } = useTranslation();
+  const statusLabel = t(`agentStatus.${agent.status}`);
   const isWorkingElsewhere = agent.status === "working" && agent.activeTopicId && agent.activeTopicId !== contextTopicId;
   return <div className={`agent-panel__agent agent-panel__agent--${agent.status}`}>
-    <span className="agent-panel__avatar-wrap"><span className={`agent-panel__avatar agent-panel__avatar--${index % 2 ? "purple" : "blue"}`}>{initials(agent.name)}</span><i className={`agent-panel__status agent-panel__status--${agent.status}`} title={statusLabels[agent.status]} /></span>
+    <span className="agent-panel__avatar-wrap"><span className={`agent-panel__avatar agent-panel__avatar--${index % 2 ? "purple" : "blue"}`}>{initials(agent.name)}</span><i className={`agent-panel__status agent-panel__status--${agent.status}`} title={statusLabel} /></span>
     <div>
       <strong>{agent.name}</strong>
       <small className="agent-panel__agent-meta">
-        <span>{isWorkingElsewhere ? `Occupé dans « ${agent.activeTopicTitle || "une autre conversation"} »` : `${agent.model || "Modèle non déclaré"} · ${statusLabels[agent.status]}`}</span>
-        {agent.status === "working" && <span className="agent-panel__thinking" aria-label="Réflexion en cours"><i /><i /><i /></span>}
+        <span>{isWorkingElsewhere ? t("agentPanel.agents.busyElsewhere", { topic: agent.activeTopicTitle || t("agentPanel.agents.anotherConversation") }) : `${agent.model || t("common.unknownModel")} · ${statusLabel}`}</span>
+        {agent.status === "working" && <span className="agent-panel__thinking" aria-label={t("agentPanel.agents.thinking")}><i /><i /><i /></span>}
       </small>
     </div>
     {agent.status === "offline"
-      ? <button className="agent-panel__delete" type="button" onClick={() => onDelete(agent.id)} aria-label={`Supprimer ${agent.name}`} title={`Supprimer ${agent.name}`}><Icon name="delete_forever" /></button>
-      : <button className="agent-panel__disconnect" type="button" onClick={() => onDisconnect(agent.id)} aria-label={`Déconnecter ${agent.name}`} title={`Déconnecter ${agent.name}`}><Icon name="link_off" /></button>}
+      ? <button className="agent-panel__delete" type="button" onClick={() => onDelete(agent.id)} aria-label={t("agentPanel.agents.delete", { name: agent.name })} title={t("agentPanel.agents.delete", { name: agent.name })}><Icon name="delete_forever" /></button>
+      : <button className="agent-panel__disconnect" type="button" onClick={() => onDisconnect(agent.id)} aria-label={t("agentPanel.agents.disconnect", { name: agent.name })} title={t("agentPanel.agents.disconnect", { name: agent.name })}><Icon name="link_off" /></button>}
   </div>;
 }
 
@@ -102,6 +99,7 @@ interface AgentPanelProps {
 }
 
 export function AgentPanel({ agents, topics, activeTopicId, tasks, onDisconnect, onDeleteAgent, onAddParticipant, onRefreshAgents, onCreateTask, onTaskInstruction, onResolveApproval, onCancelTask, onArchiveTask, onUnarchiveTask, onDeleteTask, onClose, onMobileClose }: AgentPanelProps) {
+  const { t, locale } = useTranslation();
   const { spinning: refreshing, runSpinCycle } = useSpinCycle();
   const [freeExpanded, setFreeExpanded] = useState(true);
   const [expandedRoomIds, setExpandedRoomIds] = useState<Set<string>>(() => activeTopicId ? new Set([activeTopicId]) : new Set());
@@ -118,7 +116,7 @@ export function AgentPanel({ agents, topics, activeTopicId, tasks, onDisconnect,
     topic,
     agents: agents.filter((agent) => topic.participantIds.some((participantId) => participantId.toLowerCase() === agent.id.toLowerCase())),
   }));
-  const rooms = sortRooms(roomRecords, roomPreference);
+  const rooms = sortRooms(roomRecords, roomPreference, locale);
   const activeRoom = rooms.find((room) => room.topic.id === activeTopicId);
   const connectedActiveRoomAgents = activeRoom?.agents.filter((agent) => connectedStatuses.has(agent.status)) || [];
   const connectedAgents = agents.filter((agent) => connectedStatuses.has(agent.status));
@@ -258,35 +256,31 @@ export function AgentPanel({ agents, topics, activeTopicId, tasks, onDisconnect,
   const draggedRoom = roomDrag ? rooms.find(({ topic }) => topic.id === roomDrag.sourceId) : undefined;
 
   return <aside className="agent-panel">
-    <div className="agent-panel__header"><div><span>Autour de la table</span><strong>{participantCount} participant{participantCount > 1 ? "s" : ""} connecté{participantCount > 1 ? "s" : ""}</strong></div><div className="agent-panel__header-actions"><button className={refreshing ? "agent-panel__refresh agent-panel__refresh--loading" : "agent-panel__refresh"} type="button" disabled={refreshing} onClick={() => void runSpinCycle(onRefreshAgents)} aria-label="Rafraîchir les agents" title="Rafraîchir les agents"><Icon name="refresh" /></button>{onClose && <button className="agent-panel__drawer-close" type="button" onClick={onClose} aria-label="Fermer les participants" title="Fermer les participants"><Icon name="close" /></button>}<button className="agent-panel__mobile-close" type="button" onClick={onMobileClose} aria-label="Fermer les participants"><Icon name="close" /></button></div></div>
-    <div className="agent-panel__human"><span className="agent-panel__avatar-wrap"><span className="agent-panel__avatar agent-panel__avatar--human">VO</span><i className="agent-panel__status agent-panel__status--online" title="En ligne" /></span><div><strong>Vous</strong><small>Hôte de la discussion</small></div></div>
-    <div className="agent-panel__label"><span>Agents</span><strong>{agents.length}</strong></div>
+    <div className="agent-panel__header"><div><span>{t("agentPanel.header.eyebrow")}</span><strong>{t("agentPanel.header.participants", { count: participantCount })}</strong></div><div className="agent-panel__header-actions"><button className={refreshing ? "agent-panel__refresh agent-panel__refresh--loading" : "agent-panel__refresh"} type="button" disabled={refreshing} onClick={() => void runSpinCycle(onRefreshAgents)} aria-label={t("agentPanel.header.refresh")} title={t("agentPanel.header.refresh")}><Icon name="refresh" /></button>{onClose && <button className="agent-panel__drawer-close" type="button" onClick={onClose} aria-label={t("agentPanel.header.closeParticipants")} title={t("agentPanel.header.closeParticipants")}><Icon name="close" /></button>}<button className="agent-panel__mobile-close" type="button" onClick={onMobileClose} aria-label={t("agentPanel.header.closeParticipants")}><Icon name="close" /></button></div></div>
+    <div className="agent-panel__human"><span className="agent-panel__avatar-wrap"><span className="agent-panel__avatar agent-panel__avatar--human">{initials(t("common.you"))}</span><i className="agent-panel__status agent-panel__status--online" title={t("agentPanel.human.online")} /></span><div><strong>{t("common.you")}</strong><small>{t("agentPanel.human.role")}</small></div></div>
+    <div className="agent-panel__label"><span>{t("agentPanel.agents.label")}</span><strong>{agents.length}</strong></div>
     <details className="agent-panel__group" open={freeExpanded} onToggle={(event) => setFreeExpanded(event.currentTarget.open)}>
-      <summary><span>Libres</span><strong className="agent-panel__group-count">{freeAgents.length}</strong><Icon name="expand_more" /></summary>
+      <summary><span>{t("agentPanel.free.label")}</span><strong className="agent-panel__group-count">{freeAgents.length}</strong><Icon name="expand_more" /></summary>
       <div className="agent-panel__agents">
         {freeAgents.map((agent, index) => <AgentEntry key={agent.id} agent={agent} index={index} contextTopicId={undefined} onDisconnect={onDisconnect} onDelete={onDeleteAgent} />)}
-        {!freeAgents.length && <p className="agent-panel__empty">Aucun agent n’est actuellement sans room.</p>}
+        {!freeAgents.length && <p className="agent-panel__empty">{t("agentPanel.free.empty")}</p>}
       </div>
     </details>
     <div className="agent-panel__rooms-heading">
-      <div className="agent-panel__label agent-panel__label--rooms"><span>Rooms</span><strong>{rooms.length}</strong></div>
+      <div className="agent-panel__label agent-panel__label--rooms"><span>{t("agentPanel.rooms.label")}</span><strong>{rooms.length}</strong></div>
       <div ref={roomSortMenuRef} className="agent-panel__room-sort">
-        <button className="agent-panel__room-sort-trigger" type="button" aria-label="Organiser les rooms" aria-haspopup="menu" aria-expanded={roomSortMenuOpen} onClick={() => setRoomSortMenuOpen((open) => !open)}><Icon name="more_horiz" /></button>
-        {roomSortMenuOpen && <div className="agent-panel__room-sort-menu" role="menu" aria-label="Organiser les rooms">
-          <strong>Organiser les rooms</strong>
-          <span className="agent-panel__room-sort-heading">Trier les rooms par</span>
-          {([
-            ["alphabetical", "Alphabétique"],
-            ["chronological", "Chronologique"],
-            ["custom", "Ordre manuel"],
-          ] as const).map(([mode, label]) => <button
+        <button className="agent-panel__room-sort-trigger" type="button" aria-label={t("agentPanel.sort.label")} aria-haspopup="menu" aria-expanded={roomSortMenuOpen} onClick={() => setRoomSortMenuOpen((open) => !open)}><Icon name="more_horiz" /></button>
+        {roomSortMenuOpen && <div className="agent-panel__room-sort-menu" role="menu" aria-label={t("agentPanel.sort.label")}>
+          <strong>{t("agentPanel.sort.label")}</strong>
+          <span className="agent-panel__room-sort-heading">{t("agentPanel.sort.heading")}</span>
+          {(["alphabetical", "chronological", "custom"] as const).map((mode) => <button
             key={mode}
             className={`agent-panel__room-sort-option${roomPreference.mode === mode ? " agent-panel__room-sort-option--selected" : ""}`}
             type="button"
             role="menuitemradio"
             aria-checked={roomPreference.mode === mode}
             onClick={() => selectRoomSortMode(mode)}
-          ><span>{roomPreference.mode === mode && <Icon name="check" />}</span>{label}</button>)}
+          ><span>{roomPreference.mode === mode && <Icon name="check" />}</span>{t(`agentPanel.sort.${mode}`)}</button>)}
         </div>}
       </div>
     </div>
@@ -299,15 +293,15 @@ export function AgentPanel({ agents, topics, activeTopicId, tasks, onDisconnect,
       >
         <summary onClick={(event) => handleRoomToggle(event, topic.id)} onPointerDown={(event) => startRoomPress(event, topic.id)}>
           <Icon name="expand_more" />
-          <span className="agent-panel__room-copy"><span className="agent-panel__room-title"><span className="agent-panel__room-title-text">{topic.title}</span><span className="agent-panel__room-count" aria-label={`${roomAgents.length} agent${roomAgents.length > 1 ? "s" : ""}`}>{roomAgents.length}</span></span><small>#{topic.mentionKey}</small></span>
+          <span className="agent-panel__room-copy"><span className="agent-panel__room-title"><span className="agent-panel__room-title-text">{topic.title}</span><span className="agent-panel__room-count" aria-label={t("agentPanel.rooms.agentCount", { count: roomAgents.length })}>{roomAgents.length}</span></span><small>#{topic.mentionKey}</small></span>
           <span onClick={(event) => event.stopPropagation()}><ParticipantPicker agents={agents} participantIds={topic.participantIds} onAdd={(agentId) => onAddParticipant(topic.id, agentId)} /></span>
         </summary>
         <div className="agent-panel__agents" onPointerDown={(event) => startRoomPress(event, topic.id)}>
           {roomAgents.map((agent, index) => <AgentEntry key={agent.id} agent={agent} index={index} contextTopicId={topic.id} onDisconnect={onDisconnect} onDelete={onDeleteAgent} />)}
-          {!roomAgents.length && <p className="agent-panel__empty">Aucun agent autour de cette room. Ajoutez-en un avec le bouton +.</p>}
+          {!roomAgents.length && <p className="agent-panel__empty">{t("agentPanel.rooms.emptyRoom")}</p>}
         </div>
       </details>)}
-      {!rooms.length && <p className="agent-panel__empty">Aucune conversation ouverte.</p>}
+      {!rooms.length && <p className="agent-panel__empty">{t("agentPanel.rooms.empty")}</p>}
     </div>
     {draggedRoom && roomDrag && <div className="agent-panel__room-drag-preview" style={{ left: roomDrag.clientX + 14, top: roomDrag.clientY + 14 }} aria-hidden="true">
       <Icon name="forum" />

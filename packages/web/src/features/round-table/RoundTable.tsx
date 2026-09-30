@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Agent, AuthorizationRequest, ConsiliumTask, Message, Topic } from "@consilium/core";
-import { api } from "../../core/api";
+import { api, HUMAN_MENTION } from "../../core/api";
+import { useTranslation } from "../../i18n";
 import { ConfirmDialog } from "../../shared/components/ConfirmDialog/ConfirmDialog";
 import { Icon } from "../../shared/components/Icon/Icon";
 import { useSystemNotifications, type AttentionEvent } from "../notifications/useSystemNotifications";
@@ -86,6 +87,7 @@ const sameTopics = (current: Topic[], next: Topic[]) =>
   });
 
 export function RoundTable() {
+  const { t } = useTranslation();
   const [topics, setTopics] = useState<Topic[]>([]);
   const [agents, setAgents] = useState<Agent[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -96,7 +98,7 @@ export function RoundTable() {
   const [tasks, setTasks] = useState<ConsiliumTask[]>([]);
   const [authorizations, setAuthorizations] = useState<AuthorizationRequest[]>([]);
   const [activeId, setActiveId] = useState<string>();
-  const [error, setError] = useState("");
+  const [unreachable, setUnreachable] = useState(false);
   const [mobilePanel, setMobilePanel] = useState<"topics" | "agents">();
   const [leftPanelCollapsed, setLeftPanelCollapsed] = useState(false);
   const [rightPanelCollapsed, setRightPanelCollapsed] = useState(false);
@@ -148,23 +150,23 @@ export function RoundTable() {
     topics.filter((topic) => topic.messageCount > (readMessageCounts[topic.id] ?? 0)).map((topic) => topic.id),
   ), [readMessageCounts, topics]);
   const attentionEvents: AttentionEvent[] = [
-    ...messages.filter((message) => message.authorKind === "agent" && message.mentions.includes("vous")).map((message) => ({
+    ...messages.filter((message) => message.authorKind === "agent" && message.mentions.includes(HUMAN_MENTION)).map((message) => ({
       id: `mention:${message.id}`,
       kind: "mention" as const,
-      title: `${message.authorName} vous mentionne`,
-      body: message.body.replace(/\s+/g, " ").trim().slice(0, 180) || "Un agent attend votre retour.",
+      title: t("roundTable.attention.mention.title", { name: message.authorName }),
+      body: message.body.replace(/\s+/g, " ").trim().slice(0, 180) || t("roundTable.attention.mention.fallbackBody"),
     })),
     ...authorizations.filter((authorization) => authorization.status === "pending").map((authorization) => ({
       id: `authorization:${authorization.id}`,
       kind: "authorization" as const,
-      title: "Autorisation demandée",
-      body: `${authorization.requestedByName} souhaite ${authorization.action}.`,
+      title: t("roundTable.attention.authorization.title"),
+      body: t("roundTable.attention.authorization.body", { name: authorization.requestedByName, action: authorization.action }),
     })),
     ...tasks.filter((task) => !task.archivedAt).flatMap((task) => task.approvals.filter((approval) => approval.status === "pending").map((approval) => ({
       id: `approval:${approval.id}`,
       kind: "approval" as const,
-      title: "Validation demandée",
-      body: `${task.title} : ${approval.action}.`,
+      title: t("roundTable.attention.approval.title"),
+      body: t("roundTable.attention.approval.body", { title: task.title, action: approval.action }),
     }))),
   ];
   const notifications = useSystemNotifications(attentionEvents, Boolean(activeId && initialTopicLoaded));
@@ -177,9 +179,9 @@ export function RoundTable() {
       if (activeIdRef.current !== topicId) return;
       setMessages(page.messages);
       setHasMoreMessagesBefore(page.hasMoreBefore);
-      setError("");
+      setUnreachable(false);
     } catch {
-      setError("Impossible de joindre la table. Vérifiez que le serveur Consilium est démarré.");
+      setUnreachable(true);
     }
   }, []);
   const refreshMessages = useCallback(async (topicId: string) => {
@@ -189,9 +191,9 @@ export function RoundTable() {
       const next = await api.messagesSince(topicId, latestMessage.createdAt);
       if (activeIdRef.current !== topicId) return;
       setMessages((current) => mergeMessages(current, next));
-      setError("");
+      setUnreachable(false);
     } catch {
-      setError("Impossible de joindre la table. VÃ©rifiez que le serveur Consilium est dÃ©marrÃ©.");
+      setUnreachable(true);
     }
   }, [loadInitialMessages]);
   const refreshAgents = useCallback(async () => {
@@ -219,7 +221,7 @@ export function RoundTable() {
   useEffect(() => {
     void Promise.all([api.topics(), api.agents()]).then(([nextTopics, nextAgents]) => {
       applyTopics(nextTopics); setAgents(nextAgents); setActiveId((current) => current || nextTopics[0]?.id);
-    }).catch(() => setError("Impossible de joindre la table. Vérifiez que le serveur Consilium est démarré."));
+    }).catch(() => setUnreachable(true));
   }, [applyTopics]);
   useEffect(() => {
     if (!activeId) return;
@@ -295,11 +297,11 @@ export function RoundTable() {
   const resetTopic = () => {
     if (!activeId) return;
     const topicId = activeId;
-    const topicTitle = activeTopic?.title || "ce sujet";
+    const topicTitle = activeTopic?.title || t("roundTable.confirmations.fallbackTopicName");
     setConfirmation({
-      title: "Vider ce sujet ?",
-      message: `Les messages, tâches et autorisations de « ${topicTitle} » seront supprimés. Le sujet restera disponible.`,
-      confirmLabel: "Vider les messages",
+      title: t("roundTable.confirmations.resetTopic.title"),
+      message: t("roundTable.confirmations.resetTopic.message", { topic: topicTitle }),
+      confirmLabel: t("roundTable.confirmations.resetTopic.confirmLabel"),
       confirmIcon: "delete_history",
       icon: "delete_history",
       danger: true,
@@ -313,11 +315,11 @@ export function RoundTable() {
   const deleteTopic = () => {
     if (!activeId) return;
     const topicId = activeId;
-    const topicTitle = activeTopic?.title || "ce sujet";
+    const topicTitle = activeTopic?.title || t("roundTable.confirmations.fallbackTopicName");
     setConfirmation({
-      title: "Supprimer ce sujet ?",
-      message: `« ${topicTitle} », ses messages, ses tâches et ses médias seront supprimés définitivement.`,
-      confirmLabel: "Supprimer le sujet",
+      title: t("roundTable.confirmations.deleteTopic.title"),
+      message: t("roundTable.confirmations.deleteTopic.message", { topic: topicTitle }),
+      confirmLabel: t("roundTable.confirmations.deleteTopic.confirmLabel"),
       confirmIcon: "delete_forever",
       icon: "delete_forever",
       danger: true,
@@ -334,9 +336,9 @@ export function RoundTable() {
     const agent = agents.find((candidate) => candidate.id === agentId);
     const agentName = agent?.name || agentId;
     setConfirmation({
-      title: "Déconnecter cet agent ?",
-      message: `${agentName} ne recevra plus les nouveaux messages de la table jusqu’à sa prochaine connexion.`,
-      confirmLabel: "Déconnecter",
+      title: t("roundTable.confirmations.disconnectAgent.title"),
+      message: t("roundTable.confirmations.disconnectAgent.message", { agent: agentName }),
+      confirmLabel: t("roundTable.confirmations.disconnectAgent.confirmLabel"),
       confirmIcon: "link_off",
       icon: "link_off",
       onConfirm: async () => {
@@ -349,9 +351,9 @@ export function RoundTable() {
     const agent = agents.find((candidate) => candidate.id === agentId);
     if (!agent) return;
     setConfirmation({
-      title: "Supprimer cet agent ?",
-      message: `${agent.name} sera retiré de la liste des agents et de toutes ses rooms. Ses messages historiques seront conservés.`,
-      confirmLabel: "Supprimer l’agent",
+      title: t("roundTable.confirmations.deleteAgent.title"),
+      message: t("roundTable.confirmations.deleteAgent.message", { agent: agent.name }),
+      confirmLabel: t("roundTable.confirmations.deleteAgent.confirmLabel"),
       confirmIcon: "delete_forever",
       icon: "delete_forever",
       danger: true,
@@ -384,9 +386,9 @@ export function RoundTable() {
     if (!activeId) return;
     const topicId = activeId;
     setConfirmation({
-      title: "Arrêter cette tâche ?",
-      message: "Le worker recevra une demande d’arrêt. La tâche restera conservée dans ce sujet.",
-      confirmLabel: "Arrêter la tâche",
+      title: t("roundTable.confirmations.cancelTask.title"),
+      message: t("roundTable.confirmations.cancelTask.message"),
+      confirmLabel: t("roundTable.confirmations.cancelTask.confirmLabel"),
       confirmIcon: "stop_circle",
       icon: "stop_circle",
       danger: true,
@@ -410,9 +412,9 @@ export function RoundTable() {
     if (!activeId) return;
     const topicId = activeId;
     setConfirmation({
-      title: "Supprimer cette tâche ?",
-      message: "Cette tâche et son historique seront supprimés définitivement. Cette action est irréversible.",
-      confirmLabel: "Supprimer la tâche",
+      title: t("roundTable.confirmations.deleteTask.title"),
+      message: t("roundTable.confirmations.deleteTask.message"),
+      confirmLabel: t("roundTable.confirmations.deleteTask.confirmLabel"),
       confirmIcon: "delete_forever",
       icon: "delete_forever",
       danger: true,
@@ -433,6 +435,8 @@ export function RoundTable() {
     setActiveId(topicId);
     closeMobilePanel();
   };
+  const leftToggleLabel = t(leftPanelCollapsed ? "roundTable.header.showTopics" : "roundTable.header.collapseTopics");
+  const rightToggleLabel = t(rightPanelCollapsed ? "roundTable.header.showParticipants" : "roundTable.header.collapseParticipants");
   const roundTableClassName = [
     "round-table",
     mobilePanel ? `round-table--${mobilePanel}-open` : "",
@@ -444,17 +448,17 @@ export function RoundTable() {
     <TopicList topics={topics} activeId={activeId} unreadTopicIds={unreadTopicIds} onSelect={(id) => { setActiveId(id); closeMobilePanel(); }} onCreate={() => { closeMobilePanel(); setNewTopicOpen(true); }} onMobileClose={closeMobilePanel} />
     <section className="round-table__conversation">
       <header className="round-table__header">
-        <div className="round-table__topic"><button className="round-table__panel-toggle round-table__panel-toggle--left" onClick={() => setLeftPanelCollapsed((collapsed) => !collapsed)} aria-label={leftPanelCollapsed ? "Afficher les sujets" : "Rétracter les sujets"} aria-expanded={!leftPanelCollapsed} title={leftPanelCollapsed ? "Afficher les sujets" : "Rétracter les sujets"}><Icon name={leftPanelCollapsed ? "chevron_right" : "chevron_left"} /></button><button className="round-table__mobile-nav" onClick={() => setMobilePanel("topics")} aria-label="Afficher les sujets"><Icon name="menu" /></button><span className="round-table__topic-icon"><Icon name="forum" filled /></span><div className="round-table__topic-copy"><h1>{activeTopic?.title || "La table se prépare…"}</h1><p>{activeTopic?.description || "Contexte partagé entre humains et agents"}</p></div></div>
-        <div className="round-table__actions"><button className="round-table__panel-toggle round-table__panel-toggle--right" onClick={() => setRightPanelCollapsed((collapsed) => !collapsed)} aria-label={rightPanelCollapsed ? "Afficher les participants" : "Rétracter les participants"} aria-expanded={!rightPanelCollapsed} title={rightPanelCollapsed ? "Afficher les participants" : "Rétracter les participants"}><Icon name={rightPanelCollapsed ? "chevron_left" : "chevron_right"} /></button><button className="round-table__settings" onClick={() => setSettingsOpen(true)} aria-label="Ouvrir les paramètres" title="Paramètres"><Icon name="settings" /></button><ConversationActions disabled={!activeId} onReset={() => void resetTopic()} onDelete={() => void deleteTopic()} /></div>
-        <button className="round-table__mobile-participants" onClick={() => setMobilePanel("agents")} aria-label="Afficher les participants"><Icon name="group" /></button>
+        <div className="round-table__topic"><button className="round-table__panel-toggle round-table__panel-toggle--left" onClick={() => setLeftPanelCollapsed((collapsed) => !collapsed)} aria-label={leftToggleLabel} aria-expanded={!leftPanelCollapsed} title={leftToggleLabel}><Icon name={leftPanelCollapsed ? "chevron_right" : "chevron_left"} /></button><button className="round-table__mobile-nav" onClick={() => setMobilePanel("topics")} aria-label={t("roundTable.header.showTopics")}><Icon name="menu" /></button><span className="round-table__topic-icon"><Icon name="forum" filled /></span><div className="round-table__topic-copy"><h1>{activeTopic?.title || t("roundTable.header.fallbackTitle")}</h1><p>{activeTopic?.description || t("roundTable.header.fallbackDescription")}</p></div></div>
+        <div className="round-table__actions"><button className="round-table__panel-toggle round-table__panel-toggle--right" onClick={() => setRightPanelCollapsed((collapsed) => !collapsed)} aria-label={rightToggleLabel} aria-expanded={!rightPanelCollapsed} title={rightToggleLabel}><Icon name={rightPanelCollapsed ? "chevron_left" : "chevron_right"} /></button><button className="round-table__settings" onClick={() => setSettingsOpen(true)} aria-label={t("roundTable.header.openSettings")} title={t("roundTable.header.settings")}><Icon name="settings" /></button><ConversationActions disabled={!activeId} onReset={() => void resetTopic()} onDelete={() => void deleteTopic()} /></div>
+        <button className="round-table__mobile-participants" onClick={() => setMobilePanel("agents")} aria-label={t("roundTable.header.showParticipants")}><Icon name="group" /></button>
       </header>
-      {error ? <div className="round-table__error"><Icon name="cloud_off" />{error}</div> : <MessageList messages={messages} typingAgents={typingAgents} hasMoreBefore={hasMoreMessagesBefore} loadingOlder={loadingOlderMessages} onLoadOlder={loadOlderMessages} onReply={replyToMessage} onOpenTopic={openTopic} />}
+      {unreachable ? <div className="round-table__error"><Icon name="cloud_off" />{t("roundTable.error.unreachable")}</div> : <MessageList messages={messages} typingAgents={typingAgents} hasMoreBefore={hasMoreMessagesBefore} loadingOlder={loadingOlderMessages} onLoadOlder={loadOlderMessages} onReply={replyToMessage} onOpenTopic={openTopic} />}
       <div className="round-table__composer-area">
         <AuthorizationBubble requests={authorizations} onResolve={resolveAuthorization} />
-        <MessageComposer key={activeId} topicId={activeId} agents={activeTopicAgents} topics={topics} disabled={!activeId || Boolean(error)} replyTo={replyTo} replyFocusRequest={replyFocusRequest?.topicId === activeId ? replyFocusRequest?.id : undefined} onCancelReply={() => setReplyTo(undefined)} onSend={sendMessage} />
+        <MessageComposer key={activeId} topicId={activeId} agents={activeTopicAgents} topics={topics} disabled={!activeId || unreachable} replyTo={replyTo} replyFocusRequest={replyFocusRequest?.topicId === activeId ? replyFocusRequest?.id : undefined} onCancelReply={() => setReplyTo(undefined)} onSend={sendMessage} />
       </div>
     </section>
-    {!rightPanelCollapsed && <button className="round-table__tablet-backdrop" onClick={() => setRightPanelCollapsed(true)} aria-label="Fermer le volet des participants" />}
+    {!rightPanelCollapsed && <button className="round-table__tablet-backdrop" onClick={() => setRightPanelCollapsed(true)} aria-label={t("roundTable.backdrop.closeParticipants")} />}
     <AgentPanel
       agents={agents}
       topics={topics}
@@ -474,14 +478,14 @@ export function RoundTable() {
       onClose={() => setRightPanelCollapsed(true)}
       onMobileClose={closeMobilePanel}
     />
-    {mobilePanel && <button className="round-table__mobile-backdrop" onClick={closeMobilePanel} aria-label="Fermer le panneau" />}
+    {mobilePanel && <button className="round-table__mobile-backdrop" onClick={closeMobilePanel} aria-label={t("roundTable.backdrop.closePanel")} />}
     <NewTopicDialog open={newTopicOpen} onClose={() => setNewTopicOpen(false)} onCreate={createTopic} />
     <SettingsDialog open={settingsOpen} onClose={() => setSettingsOpen(false)} notificationPermission={notifications.permission} notificationsEnabled={notifications.enabled} onToggleNotifications={() => void notifications.toggle()} onSync={syncAll} />
     <ConfirmDialog
       open={Boolean(confirmation)}
-      title={confirmation?.title || "Confirmation"}
+      title={confirmation?.title || t("confirmDialog.fallbackTitle")}
       message={confirmation?.message || ""}
-      confirmLabel={confirmation?.confirmLabel || "Confirmer"}
+      confirmLabel={confirmation?.confirmLabel}
       confirmIcon={confirmation?.confirmIcon || "check"}
       icon={confirmation?.icon || "help"}
       danger={confirmation?.danger}

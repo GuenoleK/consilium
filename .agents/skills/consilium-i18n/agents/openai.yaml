@@ -1,0 +1,4 @@
+interface:
+  display_name: "Consilium i18n"
+  short_description: "Traductions en et fr de l'interface Consilium"
+  default_prompt: "Use $consilium-i18n to add or change user-facing text in Consilium with English and French translation keys."

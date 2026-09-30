@@ -41,13 +41,52 @@ const hasValidSession = (cookieHeader: string | undefined) => {
 const safeReturnTo = (value: string | undefined) => value && value.startsWith("/") && !value.startsWith("//") ? value : "/";
 const escapeHtml = (value: string) => value.replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character] || character);
 
-const loginPage = (returnTo: string, invalidCredentials = false, attemptedUsername = username) => `<!doctype html>
-<html lang="fr">
+// The gateway is a standalone process, so its few visible strings live here instead of in the
+// web package's dictionaries. English is the default; French is picked from Accept-Language.
+const loginTexts = {
+  en: {
+    title: "Sign in to Consilium",
+    eyebrow: "Remote access",
+    intro: "Sign in to open this round table remotely.",
+    invalidCredentials: "Incorrect username or password.",
+    username: "Username",
+    password: "Password",
+    submit: "Open the table",
+    authenticationRequired: "Consilium authentication required.",
+  },
+  fr: {
+    title: "Connexion à Consilium",
+    eyebrow: "Accès distant",
+    intro: "Identifiez-vous pour ouvrir cette table ronde à distance.",
+    invalidCredentials: "Identifiant ou mot de passe incorrect.",
+    username: "Identifiant",
+    password: "Mot de passe",
+    submit: "Accéder à la table",
+    authenticationRequired: "Authentification Consilium requise.",
+  },
+} as const;
+
+type LoginLanguage = keyof typeof loginTexts;
+
+const pickLoginLanguage = (acceptLanguage: string | undefined): LoginLanguage => {
+  const preferences = (acceptLanguage ?? "").split(",").map((entry) => {
+    const [tag, ...parameters] = entry.trim().split(";");
+    const quality = Number(parameters.find((parameter) => parameter.trim().startsWith("q="))?.trim().slice(2) ?? 1);
+    return { language: tag.toLowerCase().split("-")[0], quality: Number.isNaN(quality) ? 0 : quality };
+  }).sort((left, right) => right.quality - left.quality);
+  return preferences.find((preference): preference is { language: LoginLanguage; quality: number } =>
+    preference.quality > 0 && preference.language in loginTexts)?.language ?? "en";
+};
+
+const loginPage = (language: LoginLanguage, returnTo: string, invalidCredentials = false, attemptedUsername = username) => {
+  const text = loginTexts[language];
+  return `<!doctype html>
+<html lang="${language}">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="light">
-    <title>Connexion à Consilium</title>
+    <title>${text.title}</title>
     <style>
       :root { font-family: Inter, ui-sans-serif, system-ui, sans-serif; color: #2d2925; background: #f8f4ec; }
       * { box-sizing: border-box; }
@@ -70,18 +109,19 @@ const loginPage = (returnTo: string, invalidCredentials = false, attemptedUserna
   </head>
   <body>
     <main class="remote-login" role="dialog" aria-modal="true" aria-labelledby="remote-login-title">
-      <header><div class="mark" aria-hidden="true">C</div><div><span>Accès distant</span><h1 id="remote-login-title">Connexion à Consilium</h1></div></header>
+      <header><div class="mark" aria-hidden="true">C</div><div><span>${text.eyebrow}</span><h1 id="remote-login-title">${text.title}</h1></div></header>
       <form method="post" action="${loginPath}" autocomplete="on">
-        <p>Identifiez-vous pour ouvrir cette table ronde à distance.</p>
-        ${invalidCredentials ? '<p class="error" role="alert">Identifiant ou mot de passe incorrect.</p>' : ""}
+        <p>${text.intro}</p>
+        ${invalidCredentials ? `<p class="error" role="alert">${text.invalidCredentials}</p>` : ""}
         <input type="hidden" name="returnTo" value="${escapeHtml(returnTo)}">
-        <label for="remote-username">Identifiant<input id="remote-username" name="username" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" value="${escapeHtml(attemptedUsername)}" required autofocus></label>
-        <label for="remote-password">Mot de passe<input id="remote-password" name="password" type="password" autocomplete="current-password" required></label>
-        <button type="submit">Accéder à la table</button>
+        <label for="remote-username">${text.username}<input id="remote-username" name="username" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" value="${escapeHtml(attemptedUsername)}" required autofocus></label>
+        <label for="remote-password">${text.password}<input id="remote-password" name="password" type="password" autocomplete="current-password" required></label>
+        <button type="submit">${text.submit}</button>
       </form>
     </main>
   </body>
 </html>`;
+};
 
 const app = new Hono();
 
@@ -92,7 +132,7 @@ app.post(loginPath, async (context) => {
   const returnTo = safeReturnTo(fields.get("returnTo") || undefined);
 
   if (!secureEqual(username, suppliedUsername) || !secureEqual(password, suppliedPassword)) {
-    return context.html(loginPage(returnTo, true, suppliedUsername), 401);
+    return context.html(loginPage(pickLoginLanguage(context.req.header("accept-language")), returnTo, true, suppliedUsername), 401);
   }
 
   const expiresAt = Date.now() + sessionDurationSeconds * 1000;
@@ -105,8 +145,8 @@ app.use("*", async (context, next) => {
 
   const sourceUrl = new URL(context.req.url);
   const returnTo = `${sourceUrl.pathname}${sourceUrl.search}`;
-  if (context.req.method === "GET" && context.req.header("accept")?.includes("text/html")) return context.html(loginPage(returnTo), 401);
-  return context.text("Authentification Consilium requise.", 401);
+  if (context.req.method === "GET" && context.req.header("accept")?.includes("text/html")) return context.html(loginPage(pickLoginLanguage(context.req.header("accept-language")), returnTo), 401);
+  return context.text(loginTexts[pickLoginLanguage(context.req.header("accept-language"))].authenticationRequired, 401);
 });
 
 app.all("*", async (context) => {
