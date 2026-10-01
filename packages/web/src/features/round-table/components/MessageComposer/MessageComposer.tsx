@@ -1,6 +1,8 @@
 import { memo, useEffect, useRef, useState } from "react";
 import type { Agent, Message, Topic } from "@consilium/core";
+import { useTranslation } from "../../../../i18n";
 import { Icon } from "../../../../shared/components/Icon/Icon";
+import { useAuthorName } from "../../../../shared/hooks/useAuthorName";
 import { AttachmentList } from "./components/AttachmentList/AttachmentList";
 import { MentionSuggestions } from "./components/MentionSuggestions/MentionSuggestions";
 import { ConversationSuggestions } from "./components/ConversationSuggestions/ConversationSuggestions";
@@ -8,7 +10,8 @@ import "./MessageComposer.scss";
 
 interface MentionContext { kind: "agent" | "topic"; start: number; end: number; query: string; }
 const connectedStatuses = new Set<Agent["status"]>(["online", "listening", "working"]);
-const maximumFileSize = 25 * 1024 * 1024;
+const maximumFileSizeMb = 25;
+const maximumFileSize = maximumFileSizeMb * 1024 * 1024;
 const draftDatabaseName = "consilium-composer-drafts";
 const draftStoreName = "drafts";
 
@@ -69,13 +72,15 @@ export const MessageComposer = memo(function MessageComposer({ topicId, agents, 
   onCancelReply: () => void;
   onSend: (body: string, files: File[], replyToId?: string) => Promise<void>;
 }) {
+  const { t } = useTranslation();
+  const displayName = useAuthorName();
   const [body, setBody] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const [mentionContext, setMentionContext] = useState<MentionContext>();
   const [activeMentionIndex, setActiveMentionIndex] = useState(0);
   const [isSending, setIsSending] = useState(false);
   const [isDraggingFiles, setIsDraggingFiles] = useState(false);
-  const [fileError, setFileError] = useState("");
+  const [fileTooLarge, setFileTooLarge] = useState(false);
   const [renderedReply, setRenderedReply] = useState<Message | undefined>(replyTo);
   const [isReplyLeaving, setIsReplyLeaving] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -138,7 +143,7 @@ export const MessageComposer = memo(function MessageComposer({ topicId, agents, 
     const accepted = candidates.filter((file) => file.size <= maximumFileSize);
     if (accepted.length) markLocalChange();
     setFiles((current) => [...current, ...accepted]);
-    setFileError(accepted.length === candidates.length ? "" : "Un fichier dépasse la limite de 25 Mo.");
+    setFileTooLarge(accepted.length !== candidates.length);
   };
   const handlePaste = (event: React.ClipboardEvent<HTMLTextAreaElement>) => {
     if (disabled || isSending) return;
@@ -196,10 +201,10 @@ export const MessageComposer = memo(function MessageComposer({ topicId, agents, 
     try {
       // Give the browser one frame to render the sending state before uploading large media.
       await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
-      await onSend(body.trim() || "Fichier partagé", files, replyTo?.id);
+      await onSend(body.trim() || t("messageComposer.defaultFileMessage"), files, replyTo?.id);
       setBody("");
       setFiles([]);
-      setFileError("");
+      setFileTooLarge(false);
       onCancelReply();
       hasLocalChangesRef.current = false;
       if (topicId) void queueDraftWrite(topicId, { body: "", files: [] }, true).catch(() => undefined);
@@ -212,6 +217,10 @@ export const MessageComposer = memo(function MessageComposer({ topicId, agents, 
     }
     if (sent) requestAnimationFrame(() => textareaRef.current?.focus());
   };
+
+  const sendLabel = isSending
+    ? t(files.length ? "messageComposer.send.sendingMedia" : "messageComposer.send.sending")
+    : t("messageComposer.send.idle");
 
   return <div className="message-composer">
     <div
@@ -229,12 +238,12 @@ export const MessageComposer = memo(function MessageComposer({ topicId, agents, 
     >
       {renderedReply && <div
         className={`message-composer__reply${isReplyLeaving ? " message-composer__reply--leaving" : ""}`}
-        aria-label={`Réponse à ${renderedReply.authorName}`}
+        aria-label={t("messageComposer.replyTo", { name: displayName(renderedReply) })}
         onAnimationEnd={() => { if (isReplyLeaving) setRenderedReply(undefined); }}
       >
         <span className="message-composer__reply-icon"><Icon name="reply" /></span>
-        <span className="message-composer__reply-copy"><strong>Réponse à {renderedReply.authorName}</strong><small>{renderedReply.body || "Pièce jointe"}</small></span>
-        <button type="button" onClick={onCancelReply} disabled={isSending} aria-label="Annuler la réponse"><Icon name="close" /></button>
+        <span className="message-composer__reply-copy"><strong>{t("messageComposer.replyTo", { name: displayName(renderedReply) })}</strong><small>{renderedReply.body || t("common.attachment")}</small></span>
+        <button type="button" onClick={onCancelReply} disabled={isSending} aria-label={t("messageComposer.cancelReply")}><Icon name="close" /></button>
       </div>}
       {files.length > 0 && <AttachmentList files={files} onRemove={(index) => { markLocalChange(); setFiles((current) => current.filter((_, candidate) => candidate !== index)); }} />}
       <textarea
@@ -265,8 +274,8 @@ export const MessageComposer = memo(function MessageComposer({ topicId, agents, 
             void submit();
           }
         }}
-        placeholder="Écrivez un message… Tapez @ pour un agent ou # pour une conversation"
-        aria-label="Votre message"
+        placeholder={t("messageComposer.placeholder")}
+        aria-label={t("messageComposer.label")}
         aria-autocomplete="list"
         aria-controls={mentionContext && activeSuggestions.length ? (mentionContext.kind === "topic" ? "conversation-suggestions" : "mention-suggestions") : undefined}
         aria-activedescendant={mentionContext && activeSuggestions.length ? (mentionContext.kind === "topic" ? `conversation-option-${activeSuggestionId}` : `mention-option-${activeSuggestionId}`) : undefined}
@@ -274,13 +283,13 @@ export const MessageComposer = memo(function MessageComposer({ topicId, agents, 
       {mentionContext?.kind === "agent" && mentionAgents.length > 0 && <MentionSuggestions agents={mentionAgents} activeIndex={activeMentionIndex} onSelect={selectMention} />}
       {mentionContext?.kind === "topic" && conversationSuggestions.length > 0 && <ConversationSuggestions topics={conversationSuggestions} activeIndex={activeMentionIndex} onSelect={selectTopic} />}
       <input ref={inputRef} className="message-composer__file-input" type="file" multiple accept="image/*,video/*,audio/*,.pdf,.txt,.md,.json" onChange={(event) => { addFiles(Array.from(event.target.files || [])); event.target.value = ""; }} />
-      {isDraggingFiles && <div className="message-composer__drop-hint"><Icon name="upload_file" />Déposer les fichiers ici</div>}
+      {isDraggingFiles && <div className="message-composer__drop-hint"><Icon name="upload_file" />{t("messageComposer.dropHint")}</div>}
       <div className="message-composer__tools">
-        <button type="button" disabled={isSending} onClick={() => inputRef.current?.click()} aria-label="Joindre des fichiers"><Icon name="add" /></button>
-        <span className={fileError ? "message-composer__limit message-composer__limit--error" : "message-composer__limit"} role={fileError ? "alert" : undefined}>{isSending ? (files.length ? "Envoi des médias…" : "Envoi en cours…") : fileError || "25 Mo maximum par fichier"}</span>
-        <button type="button" className={`message-composer__send${isSending ? " message-composer__send--sending" : ""}`} disabled={(!body.trim() && !files.length) || disabled || isSending} onClick={() => void submit()} aria-label={isSending ? (files.length ? "Envoi des médias en cours" : "Envoi en cours") : "Envoyer"} title={isSending ? (files.length ? "Envoi des médias en cours" : "Envoi en cours") : "Envoyer"} aria-busy={isSending}><Icon name="arrow_upward" /></button>
+        <button type="button" disabled={isSending} onClick={() => inputRef.current?.click()} aria-label={t("messageComposer.attach")}><Icon name="add" /></button>
+        <span className={fileTooLarge ? "message-composer__limit message-composer__limit--error" : "message-composer__limit"} role={fileTooLarge ? "alert" : undefined}>{isSending ? t(files.length ? "messageComposer.status.sendingMedia" : "messageComposer.status.sending") : t(fileTooLarge ? "messageComposer.fileTooLarge" : "messageComposer.limit", { size: maximumFileSizeMb })}</span>
+        <button type="button" className={`message-composer__send${isSending ? " message-composer__send--sending" : ""}`} disabled={(!body.trim() && !files.length) || disabled || isSending} onClick={() => void submit()} aria-label={sendLabel} title={sendLabel} aria-busy={isSending}><Icon name="arrow_upward" /></button>
       </div>
     </div>
-    <small>Les agents mentionnés reçoivent le message. Utilisez # pour donner une conversation de référence.</small>
+    <small>{t("messageComposer.hint")}</small>
   </div>;
 });

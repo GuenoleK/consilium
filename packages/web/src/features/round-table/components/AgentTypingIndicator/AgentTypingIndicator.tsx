@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Agent } from "@consilium/core";
+import { useTranslation } from "../../../../i18n";
 import { AgentTypingIndicatorItem } from "./AgentTypingIndicatorItem";
 import "./AgentTypingIndicator.scss";
 
@@ -14,6 +15,7 @@ interface RenderedTypingAgent {
 }
 
 export function AgentTypingIndicator({ agents, onHeightSettled }: AgentTypingIndicatorProps) {
+  const { t } = useTranslation();
   const [renderedAgents, setRenderedAgents] = useState<RenderedTypingAgent[]>(() => agents.map((agent) => ({ agent, leaving: false })));
 
   useEffect(() => {
@@ -33,7 +35,7 @@ export function AgentTypingIndicator({ agents, onHeightSettled }: AgentTypingInd
     });
   }, [agents]);
 
-  return <div className={`agent-typing-indicator${renderedAgents.length ? " agent-typing-indicator--active" : ""}`} aria-label="Agents en réflexion" aria-live={agents.length ? "polite" : undefined} onTransitionEnd={(event) => { if (event.target === event.currentTarget && event.propertyName === "max-height") onHeightSettled(); }}>
+  return <div className={`agent-typing-indicator${renderedAgents.length ? " agent-typing-indicator--active" : ""}`} aria-label={t("agentTypingIndicator.label")} aria-live={agents.length ? "polite" : undefined} onTransitionEnd={(event) => { if (event.target === event.currentTarget && event.propertyName === "max-height") onHeightSettled(); }}>
     {renderedAgents.map(({ agent, leaving }, index) => <AgentTypingIndicatorItem agent={agent} color={index % 2 ? "purple" : "blue"} leaving={leaving} onExit={(agentId) => setRenderedAgents((current) => current.filter(({ agent: currentAgent }) => currentAgent.id !== agentId))} key={agent.id} />)}
   </div>;
 }

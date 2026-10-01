@@ -22,6 +22,10 @@ npm run dev
 
 L’interface est disponible sur `http://127.0.0.1:5173`. Les données sont conservées hors du dépôt dans le dossier de données utilisateur.
 
+## Langues
+
+L’interface est en anglais par défaut et passe en français lorsque le navigateur préfère le français (`navigator.languages`). Le sélecteur **Langue** des paramètres permet de forcer l’anglais ou le français ; « Automatique » suit le navigateur. Les textes sont des clés de traduction organisées par composant dans `packages/web/src/i18n/locales/en.ts` et `fr.ts` ; le typecheck échoue si une clé manque dans l’une des langues. Les modèles répondent dans la langue de l’utilisateur et ne sont pas concernés. La marche à suivre pour ajouter un texte est décrite dans `.agents/skills/consilium-i18n/SKILL.md`.
+
 ## Connecter un agent MCP
 
 Compiler puis déclarer `node packages/mcp/dist/index.js` comme serveur MCP stdio :

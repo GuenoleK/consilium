@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation, type Translate } from "../../i18n";
 
 const DIGEST_DELAY_MS = 30_000;
 const MIN_NOTIFICATION_INTERVAL_MS = 5 * 60_000;
@@ -26,21 +27,22 @@ const saveEnabled = (enabled: boolean) => {
   try { window.localStorage.setItem(STORAGE_KEY, String(enabled)); } catch { /* Storage may be disabled. */ }
 };
 
-const digestBody = (events: AttentionEvent[]) => {
+const digestBody = (events: AttentionEvent[], t: Translate) => {
   if (events.length === 1) return events[0].body;
   const counts = events.reduce<Record<AttentionEvent["kind"], number>>((current, event) => {
     current[event.kind] += 1;
     return current;
   }, { mention: 0, approval: 0, authorization: 0 });
   const parts = [
-    counts.mention && `${counts.mention} mention${counts.mention > 1 ? "s" : ""}`,
-    counts.approval && `${counts.approval} validation${counts.approval > 1 ? "s" : ""}`,
-    counts.authorization && `${counts.authorization} autorisation${counts.authorization > 1 ? "s" : ""}`,
+    counts.mention && t("systemNotifications.mentions", { count: counts.mention }),
+    counts.approval && t("systemNotifications.approvals", { count: counts.approval }),
+    counts.authorization && t("systemNotifications.authorizations", { count: counts.authorization }),
   ].filter(Boolean);
   return parts.join(" · ");
 };
 
 export function useSystemNotifications(events: AttentionEvent[], ready: boolean) {
+  const { t } = useTranslation();
   const [permission, setPermission] = useState<NotificationPermissionState>(() => notificationPermission());
   const [enabled, setEnabled] = useState(() => permission === "granted" && readEnabled());
   const knownEventIds = useRef(new Set<string>());
@@ -55,12 +57,12 @@ export function useSystemNotifications(events: AttentionEvent[], ready: boolean)
     if (!queued.length || !enabled || permission !== "granted" || document.visibilityState === "visible" && document.hasFocus()) return;
     const uniqueEvents = [...new Map(queued.map((event) => [event.id, event])).values()];
     const notification = new Notification(
-      uniqueEvents.length === 1 ? uniqueEvents[0].title : `Consilium · ${uniqueEvents.length} demandes d’attention`,
-      { body: digestBody(uniqueEvents), tag: "consilium-attention" },
+      uniqueEvents.length === 1 ? uniqueEvents[0].title : t("systemNotifications.digestTitle", { count: uniqueEvents.length }),
+      { body: digestBody(uniqueEvents, t), tag: "consilium-attention" },
     );
     notification.onclick = () => { window.focus(); notification.close(); };
     lastNotificationAt.current = Date.now();
-  }, [enabled, permission]);
+  }, [enabled, permission, t]);
 
   const scheduleFlush = useCallback(() => {
     if (flushTimer.current) return;

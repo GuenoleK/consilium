@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { Agent } from "@consilium/core";
+import { useTranslation } from "../../../../../i18n";
 import { Icon } from "../../../../../shared/components/Icon/Icon";
 import "./ParticipantPicker.scss";
 
@@ -9,15 +10,8 @@ interface ParticipantPickerProps {
   onAdd: (agentId: string) => Promise<void>;
 }
 
-const statusLabels: Record<Agent["status"], string> = {
-  online: "Connecté",
-  listening: "En écoute",
-  working: "En réflexion",
-  away: "Inactif",
-  offline: "Déconnecté",
-};
-
 export function ParticipantPicker({ agents, participantIds, onAdd }: ParticipantPickerProps) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [addingId, setAddingId] = useState<string>();
   const [error, setError] = useState("");
@@ -41,7 +35,7 @@ export function ParticipantPicker({ agents, participantIds, onAdd }: Participant
       await onAdd(agent.id);
       setOpen(false);
     } catch {
-      setError("Ajout impossible pour le moment.");
+      setError(t("participantPicker.error"));
     } finally {
       setAddingId(undefined);
     }
@@ -54,12 +48,12 @@ export function ParticipantPicker({ agents, participantIds, onAdd }: Participant
       disabled={!availableAgents.length}
       aria-expanded={open}
       aria-controls="participant-picker-options"
-      aria-label={availableAgents.length ? "Ajouter un agent à cette conversation" : "Tous les agents déclarés participent déjà"}
-      title={availableAgents.length ? "Ajouter un agent" : "Tous les agents déclarés participent déjà"}
+      aria-label={availableAgents.length ? t("participantPicker.add") : t("participantPicker.allParticipating")}
+      title={availableAgents.length ? t("participantPicker.addShort") : t("participantPicker.allParticipating")}
       onClick={() => setOpen((current) => !current)}
     ><Icon name="person_add" /></button>
-    {open && <div id="participant-picker-options" className="participant-picker__options" role="menu" aria-label="Agents déclarés à ajouter">
-      <span className="participant-picker__label">Ajouter à cette room</span>
+    {open && <div id="participant-picker-options" className="participant-picker__options" role="menu" aria-label={t("participantPicker.menu")}>
+      <span className="participant-picker__label">{t("participantPicker.label")}</span>
       {availableAgents.map((agent) => <button
         className="participant-picker__option"
         type="button"
@@ -69,7 +63,7 @@ export function ParticipantPicker({ agents, participantIds, onAdd }: Participant
         onClick={() => void addAgent(agent)}
       >
         <span className={`participant-picker__status participant-picker__status--${agent.status}`} />
-        <span className="participant-picker__identity"><strong>{agent.name}</strong><small>@{agent.id} · {statusLabels[agent.status]}</small></span>
+        <span className="participant-picker__identity"><strong>{agent.name}</strong><small>@{agent.id} · {t(`agentStatus.${agent.status}`)}</small></span>
         {addingId === agent.id && <Icon name="progress_activity" />}
       </button>)}
       {error && <small className="participant-picker__error" role="alert">{error}</small>}

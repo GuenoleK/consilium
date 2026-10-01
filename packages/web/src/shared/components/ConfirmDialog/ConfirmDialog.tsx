@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "../../../i18n";
 import { Icon } from "../Icon/Icon";
 import "./ConfirmDialog.scss";
 
@@ -23,12 +24,13 @@ export function ConfirmDialog({
   message,
   onClose,
   onConfirm,
-  confirmLabel = "Confirmer",
+  confirmLabel,
   confirmIcon = "check",
   icon = "help",
   danger = false,
-  errorMessage = "L’action n’a pas pu être effectuée. Réessayez.",
+  errorMessage,
 }: ConfirmDialogProps) {
+  const { t } = useTranslation();
   const [rendered, setRendered] = useState(open);
   const [closing, setClosing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -93,7 +95,7 @@ export function ConfirmDialog({
       closeWithAnimation(true);
     } catch {
       setSubmitting(false);
-      setError(errorMessage);
+      setError(errorMessage ?? t("confirmDialog.error"));
     }
   };
 
@@ -107,20 +109,20 @@ export function ConfirmDialog({
       <header className="confirm-dialog__header">
         <span className={`confirm-dialog__icon${danger ? " confirm-dialog__icon--danger" : ""}`}><Icon name={icon} /></span>
         <div>
-          <span>Confirmation</span>
+          <span>{t("confirmDialog.eyebrow")}</span>
           <h2 id="confirm-dialog-title">{title}</h2>
         </div>
-        <button type="button" onClick={() => closeWithAnimation()} disabled={submitting} aria-label="Fermer"><Icon name="close" /></button>
+        <button type="button" onClick={() => closeWithAnimation()} disabled={submitting} aria-label={t("common.close")}><Icon name="close" /></button>
       </header>
 
       <div className="confirm-dialog__body">
         <p id="confirm-dialog-message" className="confirm-dialog__message">{message}</p>
         {error && <p className="confirm-dialog__error" role="alert"><Icon name="error" />{error}</p>}
         <footer className="confirm-dialog__actions">
-          <button ref={cancelButtonRef} type="button" className="confirm-dialog__cancel" onClick={() => closeWithAnimation()} disabled={submitting}>Annuler</button>
+          <button ref={cancelButtonRef} type="button" className="confirm-dialog__cancel" onClick={() => closeWithAnimation()} disabled={submitting}>{t("common.cancel")}</button>
           <button type="button" className={`confirm-dialog__confirm${danger ? " confirm-dialog__confirm--danger" : ""}`} onClick={() => void confirmAction()} disabled={submitting}>
             <Icon name={submitting ? "progress_activity" : confirmIcon} />
-            {submitting ? "En cours…" : confirmLabel}
+            {submitting ? t("confirmDialog.inProgress") : confirmLabel ?? t("common.confirm")}
           </button>
         </footer>
       </div>

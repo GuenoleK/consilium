@@ -14,6 +14,7 @@ Respecter l’architecture existante et conserver une interface claire, chaleure
 - Donner à chaque composant son dossier, son fichier `.tsx` et son fichier `.scss`.
 - Découper un composant principal en sous-composants nommés quand une section possède sa propre responsabilité ou son propre état.
 - Employer les structures `List` puis `Item` pour les collections. Garder l’item dans le dossier du composant parent s’il n’est pas réutilisé.
+- Réutiliser `Select` (menu déroulant) et `Switch` (interrupteur) de `src/shared/components` au lieu de `<select>` natifs ou de boutons d’état ad hoc ; ils portent déjà le clavier, l’accessibilité et les animations.
 - Éviter à la fois les composants monolithiques et les abstractions sans réutilisation concrète.
 
 ## Styles
@@ -23,6 +24,10 @@ Respecter l’architecture existante et conserver une interface claire, chaleure
 - Réutiliser les propriétés CSS de `shared/styles/tokens.scss` pour couleurs, fontes, rayons, ombres et thèmes.
 - Employer Material Symbols Rounded via le composant `Icon`.
 - Préserver le responsive, les états clavier, les libellés accessibles et les contrastes.
+
+## Textes
+
+- Ne jamais écrire de texte visible en dur : passer par `useTranslation()` et suivre `.agents/skills/consilium-i18n/SKILL.md` (clés en anglais et en français, organisées par composant).
 
 ## Mise en œuvre
 

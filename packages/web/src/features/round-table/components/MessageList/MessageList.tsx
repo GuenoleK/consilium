@@ -1,22 +1,25 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { Agent, Message } from "@consilium/core";
 import { api } from "../../../../core/api";
+import { useTranslation, type Translate } from "../../../../i18n";
 import { Icon } from "../../../../shared/components/Icon/Icon";
 import { RichText } from "../../../../shared/components/RichText/RichText";
+import { useAuthorName } from "../../../../shared/hooks/useAuthorName";
+import { formatFileSize } from "../../../../shared/utils/formatFileSize";
 import { AgentTypingIndicator } from "../AgentTypingIndicator/AgentTypingIndicator";
 import { MediaGallery } from "./MediaGallery";
 import "./MessageList.scss";
-const time = (value: string) => new Intl.DateTimeFormat("fr", { hour: "2-digit", minute: "2-digit" }).format(new Date(value));
-const fileExtension = (name: string) => name.includes(".") ? name.split(".").pop()?.toUpperCase() : "FICHIER";
+const formatTime = (value: string, locale: string) => new Intl.DateTimeFormat(locale, { hour: "2-digit", minute: "2-digit" }).format(new Date(value));
+const fileExtension = (name: string, fallback: string) => name.includes(".") ? name.split(".").pop()?.toUpperCase() : fallback;
 const REPLY_TARGET_HIGHLIGHT_DURATION = 1800;
-const renderAttachment = (attachment: Message["attachments"][number]) => {
+const renderAttachment = (attachment: Message["attachments"][number], t: Translate, locale: string) => {
   if (attachment.mediaType.startsWith("image/") || attachment.mediaType.startsWith("video/")) return null;
   const url = api.attachmentUrl(attachment.id);
   if (attachment.mediaType.startsWith("audio/")) return <div className="message-list__media"><audio src={url} controls preload="metadata" /><a href={url} target="_blank" rel="noreferrer">{attachment.name}</a></div>;
-  return <a className="message-list__file" href={api.attachmentUrl(attachment.id, true)} download title={`Télécharger ${attachment.name}`}>
+  return <a className="message-list__file" href={api.attachmentUrl(attachment.id, true)} download title={t("messageList.download", { name: attachment.name })}>
     <Icon name="draft" />
     <strong>{attachment.name}</strong>
-    <span><small>{fileExtension(attachment.name)}</small><small>{Math.ceil(attachment.size / 1024)} Ko</small></span>
+    <span><small>{fileExtension(attachment.name, t("common.fileKind.file"))}</small><small>{formatFileSize(attachment.size, t, locale)}</small></span>
     <Icon name="download" />
   </a>;
 };
@@ -70,7 +73,7 @@ const copyRichText = async (element: HTMLElement, fallback: string) => {
     }
   }
 
-  throw new Error("La copie n'est pas disponible dans ce navigateur.");
+  throw new Error("Copying is not available in this browser.");
 };
 
 type CopyFeedback = { messageId: string; status: "copied" | "failed" };
@@ -84,6 +87,8 @@ export const MessageList = memo(function MessageList({ messages, typingAgents, h
   onReply: (message: Message) => void;
   onOpenTopic: (topicId: string) => void;
 }) {
+  const { t, locale } = useTranslation();
+  const displayName = useAuthorName();
   const listRef = useRef<HTMLDivElement>(null);
   const shouldFollowRef = useRef(true);
   const knownMessageIdsRef = useRef<Set<string>>(new Set());
@@ -207,8 +212,8 @@ export const MessageList = memo(function MessageList({ messages, typingAgents, h
       shouldFollowRef.current = list.scrollHeight - list.scrollTop - list.clientHeight < 80;
     }}
   >
-    <div className="message-list__day"><span>Aujourd’hui</span></div>
-    {hasMoreBefore && <div className="message-list__history"><button type="button" onClick={loadOlder} disabled={loadingOlder}>{loadingOlder ? "Chargement…" : "Afficher les messages précédents"}</button></div>}
+    <div className="message-list__day"><span>{t("messageList.today")}</span></div>
+    {hasMoreBefore && <div className="message-list__history"><button type="button" onClick={loadOlder} disabled={loadingOlder}>{loadingOlder ? t("messageList.loading") : t("messageList.loadOlder")}</button></div>}
     {messages.map((message) => <article
       className={`message-list__message message-list__message--${message.authorKind}${message.id === enteringMessageId ? " message-list__message--entering" : ""}${message.id === highlightedMessageId ? " message-list__message--highlighted" : ""}`}
       key={message.id}
@@ -218,17 +223,17 @@ export const MessageList = memo(function MessageList({ messages, typingAgents, h
       }}
       tabIndex={-1}
     >
-      <div className="message-list__avatar">{message.authorKind === "human" ? "VO" : message.authorName.slice(0, 2).toUpperCase()}</div>
+      <div className="message-list__avatar">{displayName(message).slice(0, 2).toUpperCase()}</div>
       <div className="message-list__content">
-        <header><strong>{message.authorName}</strong><span>{time(message.createdAt)}</span>{message.authorKind === "agent" && <em>Agent</em>}</header>
+        <header><strong>{displayName(message)}</strong><span>{formatTime(message.createdAt, locale)}</span>{message.authorKind === "agent" && <em>{t("messageList.agentBadge")}</em>}</header>
         {message.replyTo && <button
           className="message-list__reply"
           type="button"
           onClick={() => jumpToMessage(message.replyTo!.id)}
-          aria-label={`Afficher le message cité de ${message.replyTo.authorName}`}
-          title="Remonter au message cité"
-        ><Icon name="reply" /><span><strong>{message.replyTo.authorName}</strong><small>{message.replyTo.body || "Pièce jointe"}</small></span></button>}
-        {message.attachments.length > 0 && <><MediaGallery attachments={message.attachments} /><div className="message-list__attachments">{message.attachments.filter((attachment) => !attachment.mediaType.startsWith("image/") && !attachment.mediaType.startsWith("video/")).map((attachment) => <div key={attachment.id}>{renderAttachment(attachment)}</div>)}</div></>}
+          aria-label={t("messageList.reply.jumpLabel", { name: displayName(message.replyTo) })}
+          title={t("messageList.reply.jumpTitle")}
+        ><Icon name="reply" /><span><strong>{displayName(message.replyTo)}</strong><small>{message.replyTo.body || t("common.attachment")}</small></span></button>}
+        {message.attachments.length > 0 && <><MediaGallery attachments={message.attachments} /><div className="message-list__attachments">{message.attachments.filter((attachment) => !attachment.mediaType.startsWith("image/") && !attachment.mediaType.startsWith("video/")).map((attachment) => <div key={attachment.id}>{renderAttachment(attachment, t, locale)}</div>)}</div></>}
         {message.body && <div
           ref={(element) => {
             if (element) bodyRefs.current.set(message.id, element);
@@ -237,14 +242,14 @@ export const MessageList = memo(function MessageList({ messages, typingAgents, h
           className="message-list__body"
         ><RichText topicReferences={message.topicMentions} onTopicReference={onOpenTopic}>{message.body}</RichText></div>}
         <div className="message-list__actions">
-          <button className="message-list__action message-list__reply-action" type="button" onClick={() => onReply(message)} aria-label={`Répondre au message de ${message.authorName}`}><Icon name="reply" />Répondre</button>
+          <button className="message-list__action message-list__reply-action" type="button" onClick={() => onReply(message)} aria-label={t("messageList.reply.actionLabel", { name: displayName(message) })}><Icon name="reply" />{t("messageList.reply.action")}</button>
           {message.body && <button
             className={`message-list__action message-list__copy-action${copyFeedback?.messageId === message.id ? ` message-list__copy-action--${copyFeedback.status}` : ""}`}
             type="button"
             onClick={() => void copyMessage(message)}
-            aria-label={copyFeedback?.messageId === message.id ? (copyFeedback.status === "copied" ? "Réponse copiée" : "Échec de la copie") : "Copier la réponse"}
-            title={copyFeedback?.messageId === message.id ? (copyFeedback.status === "copied" ? "Réponse copiée" : "Échec de la copie") : "Copier la réponse avec sa mise en forme"}
-          ><Icon name={copyFeedback?.messageId === message.id && copyFeedback.status === "copied" ? "check" : "content_copy"} />{copyFeedback?.messageId === message.id ? (copyFeedback.status === "copied" ? "Copié" : "Échec") : "Copier"}</button>}
+            aria-label={copyFeedback?.messageId === message.id ? t(copyFeedback.status === "copied" ? "messageList.copy.copiedLabel" : "messageList.copy.failedLabel") : t("messageList.copy.label")}
+            title={copyFeedback?.messageId === message.id ? t(copyFeedback.status === "copied" ? "messageList.copy.copiedLabel" : "messageList.copy.failedLabel") : t("messageList.copy.title")}
+          ><Icon name={copyFeedback?.messageId === message.id && copyFeedback.status === "copied" ? "check" : "content_copy"} />{copyFeedback?.messageId === message.id ? t(copyFeedback.status === "copied" ? "messageList.copy.copied" : "messageList.copy.failed") : t("messageList.copy.action")}</button>}
         </div>
       </div>
     </article>)}

@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "react";
+import { localeNames, locales, useTranslation, type LanguagePreference, type Locale, type Translate } from "../../../../i18n";
 import type { NotificationPermissionState } from "../../../notifications/useSystemNotifications";
 import { NotificationToggle } from "../../../notifications/components/NotificationToggle/NotificationToggle";
 import { Icon } from "../../../../shared/components/Icon/Icon";
+import { Select, type SelectOption } from "../../../../shared/components/Select/Select";
 import { useSpinCycle } from "../../../../shared/hooks/useSpinCycle";
 import "./SettingsDialog.scss";
 
@@ -14,15 +16,21 @@ interface SettingsDialogProps {
   onSync: () => Promise<void>;
 }
 
-const notificationStatus = (permission: NotificationPermissionState, enabled: boolean) => {
-  if (permission === "unsupported") return "Ce navigateur ne prend pas en charge les notifications système.";
-  if (permission === "denied") return "Les notifications sont bloquées dans les réglages du navigateur.";
-  if (permission === "default") return "Autorisez les notifications pour être averti hors de la fenêtre.";
-  return enabled ? "Les notifications système sont activées." : "Les notifications sont autorisées mais désactivées.";
+const notificationStatus = (permission: NotificationPermissionState, t: Translate) => {
+  if (permission === "unsupported") return t("settingsDialog.notifications.status.unsupported");
+  if (permission === "denied") return t("settingsDialog.notifications.status.denied");
+  if (permission === "default") return t("settingsDialog.notifications.status.default");
+  return t("settingsDialog.notifications.description");
 };
 
+
 export function SettingsDialog({ open, onClose, notificationPermission, notificationsEnabled, onToggleNotifications, onSync }: SettingsDialogProps) {
+  const { t, preference, setPreference } = useTranslation();
   const { spinning: syncing, runSpinCycle } = useSpinCycle();
+  const languageOptions: SelectOption<LanguagePreference>[] = [
+    { value: "auto", label: t("settingsDialog.language.auto") },
+    ...(Object.keys(locales) as Locale[]).map((code) => ({ value: code, label: localeNames[code] })),
+  ];
   const [rendered, setRendered] = useState(open);
   const [closing, setClosing] = useState(false);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
@@ -78,25 +86,26 @@ export function SettingsDialog({ open, onClose, notificationPermission, notifica
       <header className="settings-dialog__header">
         <span className="settings-dialog__icon"><Icon name="settings" /></span>
         <div>
-          <span>Configuration</span>
-          <h2 id="settings-dialog-title">Paramètres de Consilium</h2>
+          <span>{t("settingsDialog.header.eyebrow")}</span>
+          <h2 id="settings-dialog-title">{t("settingsDialog.header.title")}</h2>
         </div>
-        <button ref={closeButtonRef} type="button" onClick={closeWithAnimation} aria-label="Fermer les paramètres"><Icon name="close" /></button>
+        <button ref={closeButtonRef} type="button" onClick={closeWithAnimation} aria-label={t("settingsDialog.header.close")}><Icon name="close" /></button>
       </header>
 
       <div className="settings-dialog__body">
-        <section className="settings-dialog__section">
-          <div className="settings-dialog__section-heading"><span className="settings-dialog__section-icon"><Icon name="notifications" /></span><div><strong>Notifications</strong><p>Recevoir une alerte lorsque Consilium attend votre attention.</p></div></div>
-          <div className="settings-dialog__setting-row">
-            <span>{notificationStatus(notificationPermission, notificationsEnabled)}</span>
-            <NotificationToggle permission={notificationPermission} enabled={notificationsEnabled} onToggle={onToggleNotifications} />
-          </div>
+        <section className="settings-dialog__row">
+          <div className="settings-dialog__row-copy"><strong id="settings-language-title">{t("settingsDialog.language.title")}</strong><p>{t("settingsDialog.language.description")}</p></div>
+          <Select value={preference} options={languageOptions} onChange={setPreference} labelledBy="settings-language-title" />
         </section>
 
-        <section className="settings-dialog__section">
-          <div className="settings-dialog__section-heading"><span className="settings-dialog__section-icon"><Icon name="hub" /></span><div><strong>Connexion MCP</strong><p>Le contexte partagé reste disponible pour les agents connectés.</p></div></div>
-          <div className="settings-dialog__connection"><span><i />MCP connecté</span><small>Contexte partagé en direct</small></div>
-          <button className="settings-dialog__sync" type="button" disabled={syncing} onClick={() => void runSpinCycle(onSync)}><Icon name="sync" />{syncing ? "Synchronisation…" : "Synchroniser maintenant"}</button>
+        <section className="settings-dialog__row">
+          <div className="settings-dialog__row-copy"><strong>{t("settingsDialog.notifications.title")}</strong><p>{notificationStatus(notificationPermission, t)}</p></div>
+          <NotificationToggle permission={notificationPermission} enabled={notificationsEnabled} onToggle={onToggleNotifications} />
+        </section>
+
+        <section className="settings-dialog__row settings-dialog__row--stacked">
+          <div className="settings-dialog__row-copy"><strong>{t("settingsDialog.mcp.title")}</strong><p>{t("settingsDialog.mcp.description")}</p></div>
+          <button className={`settings-dialog__sync${syncing ? " settings-dialog__sync--loading" : ""}`} type="button" disabled={syncing} onClick={() => void runSpinCycle(onSync)}><Icon name="sync" />{syncing ? t("settingsDialog.mcp.syncing") : t("settingsDialog.mcp.sync")}</button>
         </section>
       </div>
     </section>
