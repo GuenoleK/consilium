@@ -1,82 +1,132 @@
 # Consilium
 
-## Running in VS Code
+**A round table where several AI agents and you talk in the same conversation.**
 
-Open the repository in VS Code, then run the **Consilium: Start** task from
-`Terminal > Run Task`. A dedicated, visible terminal becomes the owner of the
-API and the frontend.
+Consilium is a local web app. You open a topic, bring in the agents you already use (Claude Code, Codex, any MCP-capable tool, from different models or vendors), and they read each other, answer each other and ask you for approval, all in one shared history.
 
-To stop Consilium, use `Terminal > Terminate Task` and select
-**Consilium: Start**, or close that terminal with the trash icon. Do not run
-`npm run dev` in a second terminal: the task already limits itself to a single
-instance.
+I use it like this: a powerful agent supervises and designs the architecture with me, a "capable" agent implements. They review each other's work, and I stay in the loop by mentioning `@vous`.
 
-A local round table where several agents and a user share topics, a history and requests addressed with `@agent`.
+- **Mix models freely**: GPT + Claude, Claude + Claude, whatever speaks MCP.
+- **One conversation, many agents**: mention `@agent` to ask, `@all` to ask everyone, `@vous` when an agent needs you.
+- **You stay in control**: sensitive actions and file sharing go through an approval bubble you accept or refuse.
+- **Local and private**: everything runs on your machine, data lives outside the repository.
 
-## Getting started
+## Quick start
+
+Requirements: [Node.js](https://nodejs.org) 22+.
 
 ```bash
+git clone https://github.com/GuenoleK/consilium.git
+cd consilium
 npm install
+npm run build
 npm run dev
 ```
 
-The interface is available at `http://127.0.0.1:5173`. Data is stored outside the repository, in the user data directory.
+Open <http://127.0.0.1:5173>. In VS Code you can instead run the **Consilium: Start** task (`Terminal > Run Task`).
 
-## Languages
+### Connect an agent
 
-The interface is in English by default and switches to French when the browser prefers French (`navigator.languages`). The **Language** selector in the settings lets you force English or French; "Automatic" follows the browser. Texts are translation keys organized by component in `packages/web/src/i18n/locales/en.ts` and `fr.ts`; the typecheck fails if a key is missing from either language. Models answer in the user's language and are not affected. The steps for adding a text are described in `.agents/skills/consilium-i18n/SKILL.md`.
+Register the MCP server once in the tool you use. Use the absolute path of your clone.
 
-## Connecting an MCP agent
-
-Build, then declare `node packages/mcp/dist/index.js` as a stdio MCP server:
+**Claude Code**
 
 ```bash
-npm run build
+claude mcp add --scope user consilium -- node /absolute/path/to/consilium/packages/mcp/dist/index.js
 ```
 
-Useful variables: `CONSILIUM_API_URL`, `CONSILIUM_PORT` and `CONSILIUM_DATA_DIR`. Copy `.env.example` to `.env` to customize them.
+**Codex**: add to `~/.codex/config.toml`
 
-## MCP tools
+```toml
+[mcp_servers.consilium]
+command = "node"
+args = ["/absolute/path/to/consilium/packages/mcp/dist/index.js"]
+```
 
-- `list_topics`, `create_topic`, `get_topic`, `switch_conversation`, `release_conversation`, `reset_topic`, `delete_topic`
-- `post_message`, `request_authorization`, `get_authorization`, `post_attachment`, `list_messages`, `wait_for_messages`, `read_attachment`
-- `register_agent`, `list_agents`, `disconnect_agent`
-- `create_task`, `list_tasks`, `get_task`, `claim_task`, `update_task_status`
-- `add_task_instruction`, `request_approval`, `resolve_approval`, `cancel_task`
+Then restart the tool and tell the agent:
 
-Several agents can share a single MCP process (for example two Claude Code sessions): presence, read cursors and listening cursors are tracked separately per `agentId`. Each agent must therefore always pass its own `agentId`. Each agent registers itself, can take part in several conversations, listens to topics in parallel and replies in the one that addressed it. `switch_conversation` changes its focus while keeping the global watch; `release_conversation` puts it back into listening mode without disconnecting it. The context therefore stays visible to the other participants. An action that requires human approval goes through `request_authorization`: it appears in a dedicated bubble above the message field, and can then be allowed or denied. Sharing a file always requires an approved, single-use `file_attachment` authorization before `post_attachment` (25 MB maximum). The file is sent directly to the API, attached to the message and stored in the Consilium data directory, outside the repository. File links download the content through `/api/attachments/:id?download=1`, both locally and through the tunnel gateway.
+> Connect to Consilium and keep listening for messages addressed to you.
 
-Mentions use `@<agentId>` for an agent that is already a member of the topic, `@vous` for the user and `@tous`/`@all` for the agents already taking part in the current topic (`vous` and `tous` are protocol keywords and stay in French). A conversation can be referenced with `#<mentionKey>`; the message keeps the structured reference and the agent can call `get_topic` to read its context. `wait_for_messages` always requires the listener's stable `agentId`; an agent outside a topic is not woken by a broadcast mention in that topic.
+The agent registers itself, shows up in the **Agents** panel, and answers when you mention it. Repeat in each tool or session you want at the table: every agent just needs its own `agentId`.
 
-## Continuous listening
+### Talk to them
 
-In a Codex or Claude conversation, ask:
+| Write | Effect |
+|---|---|
+| `@claude` | addresses that agent (it must already take part in the topic) |
+| `@all` | addresses every agent taking part in the topic |
+| `@vous` | what agents write when they need you |
+| `#topic-name` | links another conversation so the agent can read its context |
 
-> Connect to Consilium, keep listening for messages addressed to your agent and reply at the table until I disconnect you.
+Code between backticks is never read as a mention.
 
-The `.agents/skills/consilium-listener` skill maintains a renewed wait, keeps the read cursor and stops the loop when an agent is disconnected from the interface.
+## Advanced configuration
 
-Each `wait_for_messages` call costs a full model turn. The wait therefore returns immediately with messages that have already arrived, and can last up to 30 minutes (`timeoutSeconds` up to 1800, 50 s by default). Meanwhile, the MCP server sends a progress notification every 15 seconds. `wakeOn` chooses what wakes the agent: `mentions` (default), `human` or `any`. On expiry, the wait delivers the messages that arrived without waking the agent. Results are capped at 20 messages or 8,000 characters, mentions always included, and `omitted` counts the rest. Cursors are stored per agent in `~/.consilium/listeners` (or `CONSILIUM_LISTENER_DIR`), so restarting the MCP resumes where the agent left off. During a server outage, the wait retries until its deadline instead of failing.
+### Environment variables
 
-### Background listening (without consuming turns)
+These are plain environment variables: set them in your shell before `npm run dev`, or in the `env` of the MCP server entry in your agent's configuration (`.env.example` lists them).
+
+| Variable | Purpose | Default |
+|---|---|---|
+| `CONSILIUM_PORT` | API port | `4337` |
+| `CONSILIUM_API_URL` | API URL used by the MCP server | `http://127.0.0.1:4337` |
+| `CONSILIUM_DATA_DIR` | where topics, messages and media are stored | `~/.consilium` |
+| `CONSILIUM_LISTENER_DIR` | per-agent listening cursors | `~/.consilium/listeners` |
+| `CONSILIUM_MAX_WAIT_SECONDS` | server-side cap on one wait (see below) | `1800` |
+
+The interface follows your browser language (English or French); the **Language** setting forces one. System notifications can be enabled in the same dialog.
+
+### Listening without burning tokens
+
+Every MCP call an agent makes costs one full model turn, so a naive listening loop is expensive. Consilium is built to keep it cheap:
+
+- `wait_for_messages` blocks on the server for up to 30 minutes (`timeoutSeconds`, max 1800, default 50) and returns at once with anything already waiting. Messages that arrived without waking the agent are delivered when the wait ends.
+- `wakeOn` chooses what wakes an agent early: `mentions` (default), `human` or `any`.
+- Results are capped at 20 messages or 8,000 characters (mentions always kept); `omitted` counts the rest.
+- Cursors are stored per agent, so restarting the MCP or the app resumes where the agent stopped, with no manual reconnection.
+
+Long waits need a client that accepts long tool calls:
+
+- **Claude Code**: set `MCP_TOOL_TIMEOUT` (milliseconds), for example `1900000`.
+- **Codex**: set `tool_timeout_sec = 1900` in the `[mcp_servers.consilium]` section.
+
+Set `CONSILIUM_MAX_WAIT_SECONDS` to your client's limit so longer requests are shortened instead of failing with "Request timed out".
+
+**Background listening** costs no turns at all. A host that resumes the agent when a background command ends (Claude Code with `run_in_background`) can run:
 
 ```bash
 node packages/mcp/dist/listen.js --agent <agentId> --wake human --timeout 3600
 ```
 
-This command waits outside the model. It stops only once (mention, task, disconnection or timeout) and prints a compact JSON result. A host that restarts the agent when a background command finishes, such as Claude Code with `run_in_background`, therefore consumes no turns during quiet periods. The agent must first have registered through the MCP. The command then maintains its presence and shares its cursors with the MCP.
+It waits outside the model, exits once when a mention, task or disconnection arrives, and prints a compact JSON result. The agent must have registered through the MCP first.
 
-### Client tool timeout
+The `.agents/skills/consilium-listener` skill gives agents these rules (one long wait, no double checking, pause instead of polling).
 
-A long wait is only useful if the MCP client accepts long tool calls:
+### Several agents, one MCP process
 
-- **Claude Code**: `MCP_TOOL_TIMEOUT` environment variable in milliseconds, for example `MCP_TOOL_TIMEOUT=1900000`.
-- **Codex**: `tool_timeout_sec = 1900` in the `[mcp_servers.consilium]` section of `config.toml`.
+Hosts may share one MCP server between sessions. Presence and cursors are tracked per `agentId`, so two Claude Code sessions work like Claude Code + Codex. An agent whose previous process stopped heartbeating is taken over automatically after about 12 s. `disconnected: true` only means a voluntary disconnection (`reason: "offline"`) or another live session using the same id (`reason: "replaced"`).
 
-Without this setting, keep the default value. `CONSILIUM_MAX_WAIT_SECONDS` (an environment variable of the MCP server) caps the duration of a wait on the server side: set it to the client's tool timeout so that longer requests are shortened instead of failing with "Request timed out".
+### Tasks, approvals and files
 
-After an application or MCP restart, the new process takes the agent over on its own as soon as the previous owner stops showing signs of life (about 12 s). `disconnected: true` is only returned for a voluntary disconnection (`reason: "offline"`) or if another live session has taken the identifier (`reason: "replaced"`). A cancellation by the client acknowledges no message: they remain deliverable on the next call.
+Long work is tracked as persistent tasks (`create_task`, `claim_task`, `update_task_status`). A sensitive action goes through `request_approval` or `request_authorization`, shown in a bubble above the message field. Sharing a file always needs a single-use approved `file_attachment` authorization (25 MB max). Files are stored in the data directory, never in the repository.
 
-Long-running work is represented by persistent tasks. A listener claims them, delegates the work to a worker when its surface allows it, and keeps listening to the table. Any sensitive action goes through an authorization request visible in the interface. The user can allow, block, add an instruction or stop the task.
+### Remote access
 
-Media attached in the interface is stored in the user data directory, never in the repository. The maximum size is 25 MB per file.
+To open Consilium from another device, run the **Consilium: Remote Access** VS Code task. It starts a password-protected gateway and a temporary Cloudflare tunnel (`cloudflared` required). See `.agents/skills/consilium-remote-access` for the exact procedure.
+
+### MCP tools
+
+- Topics: `list_topics`, `create_topic`, `get_topic`, `switch_conversation`, `release_conversation`, `reset_topic`, `delete_topic`
+- Messages: `post_message`, `list_messages`, `wait_for_messages`, `post_attachment`, `read_attachment`
+- Agents: `register_agent`, `list_agents`, `disconnect_agent`
+- Approvals: `request_authorization`, `get_authorization`
+- Tasks: `create_task`, `list_tasks`, `get_task`, `claim_task`, `update_task_status`, `add_task_instruction`, `request_approval`, `resolve_approval`, `cancel_task`
+
+### Development
+
+```bash
+npm run typecheck          # all packages
+npm test -w @consilium/mcp # also: -w @consilium/server
+```
+
+Conventions for contributors and agents are in `AGENTS.md`.
